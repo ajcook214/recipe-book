@@ -53,7 +53,10 @@ The same test files run two ways.
 - **In a browser**, with nothing installed: <http://localhost:8123/test/browser/>.
   An import map points `node:test` and `node:assert/strict` at small shims in
   `test/browser/`, so the standard test files run unmodified.
-- **Under Node**, if you have it installed: `npm test` (`node --test test/`).
+- **Under Node**: `npm test`. The script globs `test/**/*.test.js` explicitly
+  rather than passing a directory — bare `node --test` would also pick up the
+  shims in `test/browser/`, since Node treats every `.js` file under a `test/`
+  directory as a test file.
 
 Keep tests flat — plain `test(name[, options], fn)`, no subtests or hooks — so
 both runners can execute them. Browser-dependent suites guard themselves with
