@@ -1,0 +1,16 @@
+{
+  "//": "Dev-time checking only. Nothing is emitted and nothing is bundled; the repo is served to Pages exactly as it sits.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "types": []
+  },
+  "include": ["src/**/*.js"]
+}

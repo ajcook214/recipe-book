@@ -31,6 +31,38 @@ RecipeApp/
 
 Every record carries `id`, `updatedAt`, and a `deleted` tombstone flag.
 
+## Development
+
+There is no build step and nothing to install. The app is served exactly as it
+sits in the repo.
+
+You do need an `http://` origin, though — ES module imports, import maps and
+service workers are all blocked from `file://`:
+
+```
+powershell -ExecutionPolicy Bypass -File tools/serve.ps1
+```
+
+That serves the repo at <http://localhost:8123/> using only what ships with
+Windows. Pass `-Port` to change the port.
+
+### Tests
+
+The same test files run two ways.
+
+- **In a browser**, with nothing installed: <http://localhost:8123/test/browser/>.
+  An import map points `node:test` and `node:assert/strict` at small shims in
+  `test/browser/`, so the standard test files run unmodified.
+- **Under Node**, if you have it installed: `npm test` (`node --test test/`).
+
+Keep tests flat — plain `test(name[, options], fn)`, no subtests or hooks — so
+both runners can execute them. Browser-dependent suites guard themselves with
+`{ skip }` so the Node run stays green.
+
+Type checking is `tsc --noEmit` against `tsconfig.json` (`checkJs`, `strict`).
+TypeScript is a dev-time checker only; nothing is emitted and nothing is
+bundled.
+
 ## Repo conventions
 
 - `.nojekyll` — Pages serves the repo as-is, no Jekyll processing.

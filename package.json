@@ -1,0 +1,10 @@
+{
+  "name": "recipe-book",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first personal recipe book and shopping list. No build step.",
+  "scripts": {
+    "test": "node --test test/",
+    "typecheck": "tsc --noEmit"
+  }
+}

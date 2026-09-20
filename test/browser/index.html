@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recipe Book tests</title>
+
+    <!--
+      The import map is what lets one test file serve both runners: Node
+      resolves `node:test` natively, and here it resolves to a shim. No build
+      step, no bundler, no install.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "node:test": "./node-test.js",
+          "node:assert": "./node-assert.js",
+          "node:assert/strict": "./node-assert.js"
+        }
+      }
+    </script>
+
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b6b6b;
+        --line: #e3e3e3;
+        --pass: #1a7f37;
+        --fail: #b3261e;
+        --skip: #8a6d00;
+        --code-bg: #f6f6f6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16181a;
+          --fg: #e8e8e8;
+          --muted: #9a9a9a;
+          --line: #2c2f33;
+          --pass: #57ab5a;
+          --fail: #e5534b;
+          --skip: #d4a72c;
+          --code-bg: #1e2124;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 64px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      main { max-width: 820px; margin: 0 auto; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+      #summary {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+      #summary.pass { border-color: var(--pass); color: var(--pass); }
+      #summary.fail { border-color: var(--fail); color: var(--fail); }
+      .suite { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+               color: var(--muted); margin: 22px 0 8px; }
+      ol { list-style: none; margin: 0; padding: 0; }
+      li { padding: 6px 0 6px 24px; border-bottom: 1px solid var(--line); position: relative; }
+      li::before { position: absolute; left: 2px; font-weight: 700; }
+      li.pass::before { content: "\2713"; color: var(--pass); }
+      li.fail::before { content: "\2717"; color: var(--fail); }
+      li.skip::before { content: "\2013"; color: var(--skip); }
+      li.skip { color: var(--muted); }
+      pre {
+        background: var(--code-bg);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin: 8px 0 2px;
+        overflow-x: auto;
+        font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+        color: var(--fail);
+        white-space: pre-wrap;
+      }
+      code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+             font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <h1>Recipe Book tests</h1>
+      <p class="sub">
+        Same files as <code>npm test</code>, running in this browser through an
+        import map. Serve this over <code>http://</code> &mdash; import maps do
+        not work from <code>file://</code>.
+      </p>
+      <div id="summary">Running&hellip;</div>
+      <div id="results"></div>
+    </main>
+
+    <script type="module">
+      // Add new suites here. Pure modules run in both places; browser-only
+      // suites guard themselves with { skip } so the Node run stays green.
+      const SUITES = ['../merge.test.js', './env.test.js'];
+
+      const summaryEl = document.querySelector('#summary');
+      const resultsEl = document.querySelector('#results');
+
+      /** @param {unknown} err */
+      function describeError(err) {
+        if (err instanceof Error) return err.stack || `${err.name}: ${err.message}`;
+        return String(err);
+      }
+
+      let passed = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (const suite of SUITES) {
+        const { registered } = await import('./node-test.js');
+        const before = registered().length;
+
+        let loadError = null;
+        try {
+          await import(suite);
+        } catch (err) {
+          loadError = err;
+        }
+
+        const heading = document.createElement('p');
+        heading.className = 'suite';
+        heading.textContent = suite.replace(/^\.\.?\//, '');
+        resultsEl.append(heading);
+
+        const olEl = document.createElement('ol');
+        resultsEl.append(olEl);
+
+        if (loadError) {
+          failed += 1;
+          const li = document.createElement('li');
+          li.className = 'fail';
+          li.textContent = 'failed to load suite';
+          const pre = document.createElement('pre');
+          pre.textContent = describeError(loadError);
+          li.append(pre);
+          olEl.append(li);
+          continue;
+        }
+
+        for (const t of registered().slice(before)) {
+          const li = document.createElement('li');
+          li.textContent = t.name;
+
+          if (t.skip) {
+            skipped += 1;
+            li.className = 'skip';
+            li.textContent = `${t.name} (${t.skip})`;
+          } else {
+            try {
+              await t.fn();
+              passed += 1;
+              li.className = 'pass';
+            } catch (err) {
+              failed += 1;
+              li.className = 'fail';
+              const pre = document.createElement('pre');
+              pre.textContent = describeError(err);
+              li.append(pre);
+            }
+          }
+          olEl.append(li);
+        }
+      }
+
+      const total = passed + failed + skipped;
+      summaryEl.className = failed ? 'fail' : 'pass';
+      summaryEl.textContent =
+        `${passed} passed, ${failed} failed, ${skipped} skipped  (${total} total)`;
+      document.title = `${failed ? '✗' : '✓'} Recipe Book tests`;
+    </script>
+  </body>
+</html>
