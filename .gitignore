@@ -141,3 +141,42 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# ---------------------------------------------------------------------------
+# Recipe & Shopping App
+# ---------------------------------------------------------------------------
+
+# IDE / editor
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-workspace
+
+# OS cruft (repo lives in a OneDrive folder on Windows)
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+desktop.ini
+$RECYCLE.BIN/
+*~
+*.swp
+
+# Claude Code: shared settings are committed, personal overrides are not
+.claude/settings.local.json
+
+# Local app data. Real data lives in Google Drive or a folder outside the
+# repo; these are only dev scratch targets for LocalFolderAdapter.
+/RecipeApp/
+/local-data/
+/data/
+*.local.json
+
+# Local config overrides (e.g. a dev OAuth client ID)
+config.local.js
+src/config.local.js
