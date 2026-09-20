@@ -62,6 +62,16 @@ Keep tests flat — plain `test(name[, options], fn)`, no subtests or hooks — 
 both runners can execute them. Browser-dependent suites guard themselves with
 `{ skip }` so the Node run stays green.
 
+Layout: pure suites live in `test/` and run in both places. Suites needing
+IndexedDB or the File System Access API live in `test/browser/` and skip under
+Node. New suites are registered in the `SUITES` array in
+`test/browser/index.html`; the Node runner finds them by glob.
+
+`test/helpers/memory-adapter.js` is an in-memory `StorageAdapter` used to
+exercise sync without a filesystem or a network. It doubles as the reference
+implementation of the adapter contract — `test/adapter-contract.test.js` is the
+specification that `DriveAdapter` and `LocalFolderAdapter` must also satisfy.
+
 Type checking is `tsc --noEmit` against `tsconfig.json` (`checkJs`, `strict`).
 TypeScript is a dev-time checker only; nothing is emitted and nothing is
 bundled.

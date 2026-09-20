@@ -19,7 +19,7 @@ import {
   openDatabase,
   pathFor,
   saveLocal,
-  saveSynced,
+  saveFromSync,
   setMeta,
 } from '../../src/core/db.js';
 
@@ -138,7 +138,7 @@ test('saveLocal keeps the record byte-for-byte', { skip: browserOnly }, async ()
 
 test('saveLocal preserves sync bookkeeping from a previous sync', { skip: browserOnly }, async () => {
   await withDb(async (db) => {
-    await saveSynced(db, 'recipe', recipe(), {
+    await saveFromSync(db, 'recipe', recipe(), {
       version: 'v7',
       modifiedTime: T1,
       syncedAt: T1,
@@ -154,7 +154,7 @@ test('saveLocal preserves sync bookkeeping from a previous sync', { skip: browse
 
 test('a tombstone is an ordinary dirty record', { skip: browserOnly }, async () => {
   await withDb(async (db) => {
-    await saveSynced(db, 'recipe', recipe());
+    await saveFromSync(db, 'recipe', recipe());
     await saveLocal(db, 'recipe', recipe({ deleted: true, updatedAt: T2 }));
 
     const dirty = await listDirty(db);
@@ -163,9 +163,9 @@ test('a tombstone is an ordinary dirty record', { skip: browserOnly }, async () 
   });
 });
 
-test('saveSynced stores a clean record with its remote version', { skip: browserOnly }, async () => {
+test('saveFromSync stores a clean record with its remote version', { skip: browserOnly }, async () => {
   await withDb(async (db) => {
-    const env = await saveSynced(db, 'list', shoppingList(), {
+    const env = await saveFromSync(db, 'list', shoppingList(), {
       version: 'v2',
       modifiedTime: T2,
       syncedAt: T2,
@@ -214,7 +214,7 @@ test('markSynced on an unknown path is a no-op', { skip: browserOnly }, async ()
 
 test('markSynced keeps existing values when none are supplied', { skip: browserOnly }, async () => {
   await withDb(async (db) => {
-    await saveSynced(db, 'recipe', recipe(), { version: 'v1', modifiedTime: T1, syncedAt: T1 });
+    await saveFromSync(db, 'recipe', recipe(), { version: 'v1', modifiedTime: T1, syncedAt: T1 });
     await saveLocal(db, 'recipe', recipe({ title: 'Edited' }));
     const updated = await markSynced(db, 'recipes/r1.json');
     assert.equal(updated?.dirty, 0);
@@ -230,7 +230,7 @@ test('the dirty count is what the Sync button shows', { skip: browserOnly }, asy
 
     await saveLocal(db, 'recipe', recipe({ id: 'r1' }));
     await saveLocal(db, 'recipe', recipe({ id: 'r2' }));
-    await saveSynced(db, 'list', shoppingList());
+    await saveFromSync(db, 'list', shoppingList());
     assert.equal(await countDirty(db), 2);
 
     await markSynced(db, 'recipes/r1.json');
@@ -240,7 +240,7 @@ test('the dirty count is what the Sync button shows', { skip: browserOnly }, asy
 
 test('listDirty returns only pending records', { skip: browserOnly }, async () => {
   await withDb(async (db) => {
-    await saveSynced(db, 'recipe', recipe({ id: 'clean' }));
+    await saveFromSync(db, 'recipe', recipe({ id: 'clean' }));
     await saveLocal(db, 'recipe', recipe({ id: 'pending' }));
 
     const dirty = await listDirty(db);

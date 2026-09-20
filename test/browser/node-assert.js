@@ -125,18 +125,76 @@ export function notDeepEqual(actual, expected, message) {
 }
 
 /**
- * @param {() => unknown} fn
- * @param {unknown} [_expected]
+ * Match a thrown value against an expectation, the way Node does it: a class
+ * means instanceof, a RegExp tests the message, and any other function is a
+ * validator that must return true. Arrow functions have no `prototype`, which
+ * is what separates a validator from a class here.
+ *
+ * @param {unknown} err
+ * @param {any} expected
  * @param {string|Error} [message]
  * @returns {void}
  */
-export function throws(fn, _expected, message) {
+function matchError(err, expected, message) {
+  if (expected === undefined || expected === null) return;
+
+  if (expected instanceof RegExp) {
+    const text = err instanceof Error ? err.message : String(err);
+    if (!expected.test(text)) fail_(message, `Error ${show(text)} does not match ${expected}`);
+    return;
+  }
+
+  if (typeof expected === 'function') {
+    if (expected.prototype !== undefined && err instanceof expected) return;
+    // A validator may assert internally and throw; let that propagate.
+    if (expected(err) === true) return;
+    fail_(message, `Error did not match the expected type: ${show(String(err))}`);
+  }
+}
+
+/**
+ * @param {() => unknown} fn
+ * @param {any} [expected]
+ * @param {string|Error} [message]
+ * @returns {void}
+ */
+export function throws(fn, expected, message) {
   try {
     fn();
-  } catch {
+  } catch (err) {
+    matchError(err, expected, message);
     return;
   }
   fail_(message, 'Expected the function to throw, but it did not');
+}
+
+/**
+ * @param {Promise<unknown>|(() => Promise<unknown>)} promiseOrFn
+ * @param {any} [expected]
+ * @param {string|Error} [message]
+ * @returns {Promise<void>}
+ */
+export async function rejects(promiseOrFn, expected, message) {
+  try {
+    await (typeof promiseOrFn === 'function' ? promiseOrFn() : promiseOrFn);
+  } catch (err) {
+    matchError(err, expected, message);
+    return;
+  }
+  fail_(message, 'Expected the promise to reject, but it resolved');
+}
+
+/**
+ * @param {Promise<unknown>|(() => Promise<unknown>)} promiseOrFn
+ * @param {string|Error} [message]
+ * @returns {Promise<void>}
+ */
+export async function doesNotReject(promiseOrFn, message) {
+  try {
+    await (typeof promiseOrFn === 'function' ? promiseOrFn() : promiseOrFn);
+  } catch (err) {
+    fail_(message, `Expected the promise to resolve, but it rejected: ${show(String(err))}`);
+  }
 }
 
 /**
@@ -171,6 +229,8 @@ const assert = Object.assign(ok, {
   deepStrictEqual: deepEqual,
   notDeepStrictEqual: notDeepEqual,
   throws,
+  rejects,
+  doesNotReject,
   match,
   fail,
 });

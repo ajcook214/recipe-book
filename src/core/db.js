@@ -143,6 +143,22 @@ export function pathFor(type, id) {
 }
 
 /**
+ * The inverse of pathFor. Returns null for paths the working copy does not
+ * mirror - manifest.json, images/ - so sync can skip them without a special
+ * case at every call site.
+ *
+ * @param {string} path
+ * @returns {RecordType|null}
+ */
+export function typeForPath(path) {
+  if (path === 'catalog.json') return 'catalog';
+  if (!path.endsWith('.json')) return null;
+  if (path.startsWith('recipes/') && !path.slice(8).includes('/')) return 'recipe';
+  if (path.startsWith('lists/') && !path.slice(6).includes('/')) return 'list';
+  return null;
+}
+
+/**
  * @param {RecordType} type
  * @param {any} record
  * @returns {string}
@@ -210,16 +226,21 @@ export async function saveLocal(db, type, record) {
 }
 
 /**
- * Write a record that is known to match storage: clean, with the remote
- * version recorded. Used after a successful pull or push.
+ * Write a record together with the remote version it was reconciled against.
+ * Used by sync after a pull, a push, or a merge.
+ *
+ * `dirty` defaults to 0, the ordinary case where the local copy now matches
+ * storage. Sync passes 1 when a merge produced something that still has to be
+ * pushed, which must not lose the remote version that the next write will be
+ * checked against.
  *
  * @param {IDBDatabase} db
  * @param {RecordType} type
  * @param {any} record
- * @param {{ version?: string|null, modifiedTime?: string|null, syncedAt?: string|null }} [remote]
+ * @param {{ version?: string|null, modifiedTime?: string|null, syncedAt?: string|null, dirty?: 0|1 }} [remote]
  * @returns {Promise<Envelope>}
  */
-export async function saveSynced(db, type, record, remote = {}) {
+export async function saveFromSync(db, type, record, remote = {}) {
   const id = idOf(type, record);
   const path = pathFor(type, id);
 
@@ -229,7 +250,7 @@ export async function saveSynced(db, type, record, remote = {}) {
     type,
     id,
     record,
-    dirty: 0,
+    dirty: remote.dirty ?? 0,
     version: remote.version ?? null,
     remoteModifiedTime: remote.modifiedTime ?? null,
     syncedAt: remote.syncedAt ?? null,
