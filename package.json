@@ -6,5 +6,8 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
   }
 }
