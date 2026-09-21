@@ -34,6 +34,12 @@ export async function render(ctx) {
         const { recipe, warnings } = normalizeRecipe(raw);
         const existing = await getRecord(ctx.db, 'recipe', recipe.id);
 
+        // Rating is the owner's judgement, not something ingestion knows.
+        // Re-importing a re-summarized recipe must not wipe it.
+        if (existing && !existing.deleted && recipe.rating === null) {
+          recipe.rating = existing.rating ?? null;
+        }
+
         // The import itself is the edit. Stamping it now means a re-import
         // wins over the older copy on the next sync, instead of losing a
         // last-writer-wins comparison against the file's original timestamp.
