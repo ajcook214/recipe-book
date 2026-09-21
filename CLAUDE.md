@@ -90,9 +90,42 @@ store aisle.
 
 ## Build order (settled)
 
-Storage and sync first, exercised through `LocalFolderAdapter` so the merge
-logic can be proven on desktop with no OAuth involved. `DriveAdapter` and the
-Google sign-in flow come after the sync algorithm is correct. UI last.
+1. ~~Storage and sync~~ — done. `merge.js`, `db.js` and `sync.js` are proven
+   against an in-memory adapter (`test/helpers/memory-adapter.js`).
+2. **Minimal UI** on the local IndexedDB working copy, so the app is usable
+   offline on a phone before any sync exists.
+3. `DriveAdapter` and the Google sign-in flow.
+
+`LocalFolderAdapter` is **deferred**. Its remaining value was bulk import, and
+the Import screen covers that.
+
+## Engineering approach
+
+This is a personal project. Test where data can be lost (merge, sync, import
+validation) and keep everything else light. Favour a usable app over
+infrastructure.
+
+## Recipe ingestion (settled)
+
+Claude is the primary ingestion engine. Given a recipe URL or saved HTML, it
+produces a recipe JSON file matching docs/schema.md, which the app loads via its
+Import screen (file picker or paste).
+
+- **Go through the app, never straight into Drive.** Under the `drive.file`
+  scope the app cannot see files it did not create, so a recipe written into
+  Drive directly would be invisible. Imported records are pushed on next sync
+  and the app creates the Drive files itself.
+- **Prefer the page's schema.org `Recipe` JSON-LD** when present; most recipe
+  sites embed it.
+- **Ingredients** are facts: structure them into qty/unit/item/key/note.
+- **Steps are rewritten in Claude's own words**, never copied, and carry **no
+  quantities** — amounts live only in ingredients, so scaling stays correct.
+- `source` records the original URL.
+- Ingested files go in `/local-data/` (gitignored). **This repo is public:
+  never commit recipe data.**
+
+Later, for independence: an in-app JSON-LD importer could handle most sites
+deterministically, with no LLM involved.
 
 ## Record schemas (settled)
 
@@ -114,4 +147,4 @@ of salt.
 
 ## Open decisions
 
-- None blocking. Next up is the storage layer.
+- None blocking. Next up is the minimal UI.
