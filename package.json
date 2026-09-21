@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Offline-first personal recipe book and shopping list. No build step.",
   "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/serve.ps1",
     "test": "node --test \"test/**/*.test.js\"",
     "typecheck": "tsc --noEmit"
   },

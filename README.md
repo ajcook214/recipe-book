@@ -40,11 +40,12 @@ You do need an `http://` origin, though — ES module imports, import maps and
 service workers are all blocked from `file://`:
 
 ```
-powershell -ExecutionPolicy Bypass -File tools/serve.ps1
+npm start
 ```
 
-That serves the repo at <http://localhost:8123/> using only what ships with
-Windows. Pass `-Port` to change the port.
+That serves the repo at <http://localhost:8123/> using `tools/serve.ps1`, which
+needs nothing beyond what ships with Windows. Change the port with
+`npm start -- -Port 8124`.
 
 ### Tests
 
