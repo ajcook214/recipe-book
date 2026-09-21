@@ -112,6 +112,18 @@ textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-
 
 /* --- recipe list --- */
 
+.list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+.min-rating { display: flex; align-items: center; gap: 10px; flex: 1 1 220px; }
+.min-rating input { flex: 1; accent-color: var(--accent); min-height: var(--tap); }
+.min-rating-value { min-width: 6.5em; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
 .chip {
   min-height: 34px;

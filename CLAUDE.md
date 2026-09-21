@@ -120,6 +120,11 @@ Import screen (file picker or paste).
 - **Ingredients** are facts: structure them into qty/unit/item/key/note.
 - **Steps are rewritten in Claude's own words**, never copied, and carry **no
   quantities** — amounts live only in ingredients, so scaling stays correct.
+  Refer to ingredients relatively ("half the zest"). The one exception is
+  something that is not an ingredient, like pasta water: give it **per
+  serving** ("about 1/4 cup per serving") so it still scales.
+- **Meal-kit units** (HelloFresh "1 unit stock concentrate") become something
+  buyable in a store, with a note saying what it replaces.
 - **Summarize hard.** Short, imperative steps a cook can follow at a glance.
   Drop the life story, SEO filler, tips that restate the obvious, and
   "about 1 cup" volume hints. Keep only what changes the outcome: times,
