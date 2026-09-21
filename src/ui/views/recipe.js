@@ -102,7 +102,11 @@ export async function render(ctx, [id]) {
       type: 'button',
       class: 'danger',
       onclick: async () => {
-        if (!confirm(`Delete "${recipe?.title}"?`)) return;
+        const sure = confirm(
+          `Are you sure you want to delete "${recipe?.title}"?\n\n` +
+            'It will also be removed from your other devices the next time you sync.',
+        );
+        if (!sure) return;
         await save({ deleted: true });
         ctx.flash('Recipe deleted');
         ctx.navigate('#/');
