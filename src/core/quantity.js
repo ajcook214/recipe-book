@@ -73,6 +73,10 @@ const PLURALS = {
   stick: 'sticks',
   quart: 'quarts',
   pint: 'pints',
+  piece: 'pieces',
+  bag: 'bags',
+  box: 'boxes',
+  bottle: 'bottles',
 };
 
 /**
