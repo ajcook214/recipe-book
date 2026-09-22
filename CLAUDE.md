@@ -156,4 +156,5 @@ of salt.
 
 ## Open decisions
 
-- None blocking. Next up is the minimal UI.
+- None blocking. The minimal UI (recipes, lists, catalog, import) is in place;
+  next up is `DriveAdapter` and sign-in.

@@ -1,5 +1,7 @@
 // @ts-check
 import { getRecord, saveLocal } from '../../core/db.js';
+import { normalizeCatalog, normalizeList } from '../../core/list.js';
+import { mergeCatalog } from '../../core/merge.js';
 import { normalizeRecipe } from '../../core/recipe.js';
 import { h, nowIso } from '../dom.js';
 
@@ -28,8 +30,37 @@ export async function render(ctx) {
       return;
     }
 
-    // One recipe per file is the norm, but accept an array for bulk pastes.
+    // One record per file is the norm, but accept an array for bulk pastes.
     for (const raw of Array.isArray(parsed) ? parsed : [parsed]) {
+      const kind = kindOf(raw);
+
+      if (kind === 'list') {
+        try {
+          const { list, warnings } = normalizeList(raw);
+          const existing = await getRecord(ctx.db, 'list', list.id);
+          await saveLocal(ctx.db, 'list', list);
+          const verb = existing && !existing.deleted ? 'Updated' : 'Imported';
+          report('ok', label, `${verb} list "${list.name}" (${list.items.length} items)`, warnings, undefined, `#/list/${encodeURIComponent(list.id)}`);
+        } catch (err) {
+          report('error', label, err instanceof Error ? err.message : String(err));
+        }
+        continue;
+      }
+
+      if (kind === 'catalog') {
+        try {
+          const { catalog, warnings } = normalizeCatalog(raw);
+          // Merge rather than replace: importing staples must not throw away
+          // entries this device has learned from use.
+          const merged = mergeCatalog(await getRecord(ctx.db, 'catalog'), catalog);
+          await saveLocal(ctx.db, 'catalog', merged);
+          report('ok', label, `Merged ${catalog.items.length} catalog items`, warnings);
+        } catch (err) {
+          report('error', label, err instanceof Error ? err.message : String(err));
+        }
+        continue;
+      }
+
       try {
         const { recipe, warnings } = normalizeRecipe(raw);
         const existing = await getRecord(ctx.db, 'recipe', recipe.id);
@@ -59,9 +90,11 @@ export async function render(ctx) {
    * @param {string} label
    * @param {string} message
    * @param {string[]} [warnings]
-   * @param {string} [id]
+   * @param {string} [id]     recipe id, to link the result to it
+   * @param {string} [href]   explicit link, for lists
    */
-  function report(kind, label, message, warnings = [], id) {
+  function report(kind, label, message, warnings = [], id, href) {
+    const link = href ?? (id ? `#/recipe/${encodeURIComponent(id)}` : null);
     results.prepend(
       h(
         'li',
@@ -70,7 +103,7 @@ export async function render(ctx) {
         h(
           'div',
           null,
-          id ? h('a', { href: `#/recipe/${encodeURIComponent(id)}` }, message) : message,
+          link ? h('a', { href: link }, message) : message,
           h('span', { class: 'muted' }, ` — ${label}`),
           warnings.length ? h('ul', { class: 'warnings' }, warnings.map((w) => h('li', null, w))) : null,
         ),
@@ -99,7 +132,7 @@ export async function render(ctx) {
     'section',
     { class: 'import' },
     h('h1', null, 'Import recipes'),
-    h('p', { class: 'muted' }, 'Recipe JSON files, one recipe each. Re-importing a recipe with the same id updates it.'),
+    h('p', { class: 'muted' }, 'Recipe, shopping list or catalog JSON files. Re-importing something with the same id updates it; a catalog merges into the one you have.'),
     h('label', { class: 'button file-button' }, 'Choose files…', fileInput),
     h('h2', null, 'Or paste'),
     paste,
@@ -117,4 +150,18 @@ export async function render(ctx) {
     ),
     results,
   );
+}
+
+/**
+ * Tell recipes, lists and catalogs apart by shape. Anything unrecognised is
+ * treated as a recipe, so the recipe validator produces the error message.
+ *
+ * @param {any} raw
+ * @returns {'recipe'|'list'|'catalog'}
+ */
+function kindOf(raw) {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return 'recipe';
+  if ('title' in raw || Array.isArray(raw.ingredients)) return 'recipe';
+  if (Array.isArray(raw.items)) return 'name' in raw ? 'list' : 'catalog';
+  return 'recipe';
 }

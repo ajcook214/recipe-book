@@ -22,8 +22,9 @@ export function h(tag, props, ...children) {
       el.addEventListener(key.slice(2).toLowerCase(), value);
     } else if (key === 'class') {
       el.className = value;
-    } else if (key === 'for') {
-      el.setAttribute('for', value);
+    } else if (key === 'for' || key === 'list' || key === 'form') {
+      // Read-only as properties: assigning `input.list` is silently ignored.
+      el.setAttribute(key, value);
     } else if (key in el && !key.includes('-')) {
       /** @type {any} */ (el)[key] = value;
     } else {

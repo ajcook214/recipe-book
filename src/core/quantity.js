@@ -74,6 +74,8 @@ const PLURALS = {
   quart: 'quarts',
   pint: 'pints',
   piece: 'pieces',
+  gallon: 'gallons',
+  loaf: 'loaves',
   bag: 'bags',
   box: 'boxes',
   bottle: 'bottles',

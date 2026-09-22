@@ -213,3 +213,113 @@ textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-
   font-size: 0.95rem;
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
 }
+
+/* --- shopping lists --- */
+
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.list-name {
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.list-name:focus { outline: none; border-bottom-color: var(--accent); }
+
+.add-form { display: flex; gap: 8px; }
+.add-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+}
+.quick-add { margin: 10px 0 14px; }
+
+.shop-list { list-style: none; margin: 0; padding: 0; }
+.shop-list .row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.shop-list .row label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.shop-list input[type="checkbox"] { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+.row-text { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; }
+.row-name { font-size: 1.05rem; }
+.row-amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+.row-sources {
+  flex-basis: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.row.done .row-name, .row.done .row-amount { color: var(--muted); text-decoration: line-through; }
+.row-remove {
+  flex: none;
+  width: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.4rem;
+}
+.empty-row { padding: 16px 0; }
+
+.recipe-sources { list-style: none; margin: 0; padding: 0; }
+.recipe-sources li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+button.small { min-height: 34px; padding: 0 12px; font-size: 0.9rem; }
+.footer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* --- add-to-list panel on a recipe --- */
+
+.add-toggle { margin-top: 16px; }
+.add-panel {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.add-panel > p { margin: 0 0 10px; }
+.panel-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.panel-row select { flex: 1; min-width: 0; }
+.pick-list { list-style: none; margin: 0; padding: 0; }
+.pick-list label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.pick-list input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }

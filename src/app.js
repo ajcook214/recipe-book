@@ -4,6 +4,8 @@ import { h } from './ui/dom.js';
 import * as recipesView from './ui/views/recipes.js';
 import * as recipeView from './ui/views/recipe.js';
 import * as importView from './ui/views/import.js';
+import * as listsView from './ui/views/lists.js';
+import * as listView from './ui/views/list.js';
 
 /**
  * App shell: opens the working copy and routes hash URLs to views.
@@ -14,6 +16,8 @@ import * as importView from './ui/views/import.js';
 const ROUTES = [
   [/^#?\/?$/, recipesView.render, 'recipes'],
   [/^#\/recipe\/([^/]+)$/, recipeView.render, 'recipes'],
+  [/^#\/lists$/, listsView.render, 'lists'],
+  [/^#\/list\/([^/]+)$/, listView.render, 'lists'],
   [/^#\/import$/, importView.render, 'import'],
 ];
 

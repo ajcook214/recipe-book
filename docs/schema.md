@@ -105,9 +105,14 @@ Scaling multiplies `qty` by `target / servings` for every ingredient where
 ```
 
 Two recipes contributing flour produce **two items**. The list view groups by
-`key` + `unit` and shows one combined row with the total, expandable to the
-underlying lines. Removing a recipe from the list drops exactly the items whose
-`from.recipeId` matches.
+`key` and shows one combined row with the total and the recipes it came from;
+checking the row checks every line behind it. When a row mixes units, weights
+(oz, lb) and volumes (tsp, tbsp, cup) convert within their family — 20 oz +
+1 lb shows as 2¼ lb — while a single unit is left as written. Removing a recipe
+from the list drops exactly the items whose `from.recipeId` matches.
+
+Adding a recipe to a list shows its ingredients with checkboxes, so pantry
+staples can be unticked before anything is stored.
 
 Deleted items are tombstoned in place (`deleted: true` on the item) until the
 list itself is pruned, so a delete on one device survives a merge with another.
