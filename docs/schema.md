@@ -83,7 +83,7 @@ Scaling multiplies `qty` by `target / servings` for every ingredient where
     {
       "id": "c14e…",                  // stable; the unit of per-item merge
       "text": "ground beef",
-      "key": "ground-beef",           // null for free-form entries
+      "key": "ground-beef",           // slug; free-form text gets one too
       "qty": 3, "unit": "lb",
       "checked": false,
       "checkedAt": null,
@@ -96,7 +96,7 @@ Scaling multiplies `qty` by `target / servings` for every ingredient where
       }
     },
     {
-      "id": "77b0…", "text": "paper towels", "key": null,
+      "id": "77b0…", "text": "paper towels", "key": "paper-towels",
       "qty": null, "unit": null, "checked": false, "checkedAt": null,
       "sort": 200, "updatedAt": "…", "from": null
     }
