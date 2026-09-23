@@ -159,5 +159,7 @@ of salt.
 - None blocking. The minimal UI (recipes, lists, catalog, import) is in place.
 
 **The plan for finishing v1 is [docs/roadmap.md](docs/roadmap.md)**, broken into
-chunks of about one chat each. Next up is chunk 1: ship to GitHub Pages as a
-PWA.
+chunks of about one chat each. Next up is chunk 1: deploy to GitHub Pages and
+make it load without a signal.
+
+Recipe editing and creation is **after v1**, not part of the MVP.

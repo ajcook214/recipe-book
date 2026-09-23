@@ -15,43 +15,47 @@ with combining and the catalog, and JSON import. 77 Node tests plus browser
 suites at `/test/browser/`.
 
 Missing: any real storage backend, so nothing leaves the browser it was typed
-into. Also no PWA, no deploy, no in-app recipe editing.
+into. Also not deployed anywhere, and it does not yet load without a signal.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
-| 1 | Ship to Pages as a PWA | M | The app installed on your phone |
+| 1 | Deploy to Pages, working offline | M | A URL that works on your phone in a shop |
 | 2 | Google Cloud OAuth setup | S | A client ID the app can use |
 | 3 | `DriveAdapter` | L | Drive passing the adapter contract |
 | 4 | Sign-in and the Sync screen | M | Recipes on every device |
-| 5 | Recipe editing | M | Fixing a recipe without re-importing |
-| 6 | List and catalog editing | M | Amounts, order, and managing staples |
-| 7 | Backup, pruning, archiving | S | An exit door and a tidy store |
+| 5 | List and catalog editing | M | Amounts, order, and managing staples |
+| 6 | Backup, pruning, archiving | S | An exit door and a tidy store |
 
-Chunks 5–7 are independent of each other. Do them in any order, or skip any of
-them; the app is usable without them.
+Chunks 5 and 6 are independent of each other and of everything above. Do them
+in any order, or skip them; the app is usable without them.
 
 ---
 
-## 1. Ship to Pages as a PWA
+## 1. Put it on the web, and make it work with no signal
 
 **Why first:** it is small, it proves the deployed paths work, and it gives you
-the HTTPS origin that chunk 2 has to register. You also get the app on your
-phone before any sync exists.
+the HTTPS origin that chunk 2 has to register. You also get a URL you can open
+on your phone before any sync exists.
+
+This is a website you visit, not something installed from a store. The service
+worker still matters though: without it, opening the page in a shop with no
+signal just fails, and "works in a grocery store with bad reception" is the
+whole point.
 
 **Work**
 - Enable GitHub Pages on `main` at the repo root. The site lands at
   `https://ajcook214.github.io/recipe-book/`.
-- `manifest.webmanifest`: name, `start_url: "./"`, `display: "standalone"`,
-  theme colours matching `styles.css`, icons.
-- Icons: 192px and 512px PNGs, plus an `apple-touch-icon` for iOS.
 - `sw.js`: cache the app shell (`index.html`, `styles.css`, `src/**`) so the
-  app opens with no signal. Version the cache name and clean up old caches on
-  activate.
+  page opens with no signal. Version the cache name and clean up old caches on
+  activate. **This is the part that matters.**
 - Register the service worker from `app.js`, guarded so `file://` and the test
   page are unaffected.
+- *Optional:* `manifest.webmanifest` plus icons, so the page can be added to
+  the home screen and open without browser chrome. Nice, not required — it is
+  the same website either way.
 
-**Done when:** the Pages URL loads on your phone, installs to the home screen,
-and still opens in airplane mode.
+**Done when:** the Pages URL loads on your phone over mobile data, and still
+loads in airplane mode.
 
 **Watch out**
 - The site is served from `/recipe-book/`, not the domain root. Every path must
@@ -59,11 +63,11 @@ and still opens in airplane mode.
 - A cache-first service worker can pin an old version of the app forever. Decide
   the update strategy deliberately (network-first for `index.html` is the safe
   default).
-- No build step means no icon generation. The icons need to be committed as
-  real files.
+- No build step means no icon generation, so any icons have to be committed as
+  real files. Skippable.
 
-**Start with:** "Read docs/roadmap.md chunk 1 and ship the app to GitHub Pages
-as an installable PWA."
+**Start with:** "Read docs/roadmap.md chunk 1 and deploy to GitHub Pages with
+offline caching."
 
 ---
 
@@ -157,29 +161,7 @@ screen."
 
 ---
 
-## 5. Recipe editing
-
-**Why:** today a recipe can only arrive by import. Fixing a typo means editing
-JSON and re-importing.
-
-**Work**
-- An edit form covering every field, including add/remove/reorder of
-  ingredients and steps.
-- "New recipe" for something that never came from a website.
-- Reuse `normalizeRecipe` on save, so hand-edits meet the same bar as imports.
-
-**Done when:** a recipe can be created and edited entirely in the app, and the
-result imports and syncs like any other.
-
-**Watch out:** ingredient rows are the fiddly part on a phone. Keep the amount,
-unit and item as three fields rather than one parsed string; `qty` is a decimal
-and `key` comes from `slugify(item)`.
-
-**Start with:** "Read docs/roadmap.md chunk 5 and build recipe editing."
-
----
-
-## 6. List and catalog editing
+## 5. List and catalog editing
 
 **Why:** the gaps noticed while using the list screens.
 
@@ -194,12 +176,12 @@ and `key` comes from `slugify(item)`.
 **Done when:** you can fix a wrong amount and manage your staples without
 editing files.
 
-**Start with:** "Read docs/roadmap.md chunk 6 and build list and catalog
+**Start with:** "Read docs/roadmap.md chunk 5 and build list and catalog
 editing."
 
 ---
 
-## 7. Backup, pruning, archiving
+## 6. Backup, pruning, archiving
 
 **Why:** small loose ends, one chat.
 
@@ -216,12 +198,21 @@ editing."
   `docs/schema.md`, but nothing reads or writes it. Either write it on sync, or
   drop it from the schema.
 
-**Start with:** "Read docs/roadmap.md chunk 7."
+**Start with:** "Read docs/roadmap.md chunk 6."
 
 ---
 
-## Not in v1
+## After v1
 
-Deferred deliberately, recorded so they are not forgotten: recipe photos and
-`images/`, and grouping shopping lists by store aisle (unless it gets picked up
-in chunk 6).
+**Recipe editing and creation.** Essential, but not for the MVP: recipes arrive
+by import today, and editing one means changing the JSON and re-importing. The
+first thing to build once the build is stable.
+
+- An edit form for every field, including add, remove and reorder of
+  ingredients and steps, plus "New recipe" for something with no website.
+- Reuse `normalizeRecipe` on save, so hand-edits meet the same bar as imports.
+- The fiddly part is ingredient rows on a phone. Keep amount, unit and item as
+  three fields rather than one parsed string.
+
+Also deferred, recorded so they are not forgotten: recipe photos and `images/`,
+and grouping shopping lists by store aisle (unless it is picked up in chunk 5).
