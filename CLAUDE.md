@@ -2,6 +2,29 @@
 
 Personal-use recipe book and shopping list web app. Single user (the owner), multiple devices (desktop + phone). Owner is an experienced developer.
 
+## Start here
+
+**The plan is [docs/roadmap.md](docs/roadmap.md)** — remaining work in chunks of
+about one session each, plus the **working agreements**: conventions already
+paid for that are easy to break by accident. Read that file's agreements before
+writing code, and update the chunk's **Status** line when you finish.
+
+```
+npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
+npm test         # 77 Node tests
+npm run typecheck
+```
+
+Node lives at `C:\Program Files\nodejs`; if `npm` is not found, prepend that to
+`PATH` for the call.
+
+The other 48 tests need a browser (IndexedDB) and skip under Node. Run them at
+<http://localhost:8123/test/browser/>. Both suites should be green before and
+after a session.
+
+Sample data is in `local-data/` (gitignored): five recipes in `import/`, a
+shopping list and a catalog in `shopping/`. Load them from the Import screen.
+
 ## Goals & constraints
 
 - **Free forever.** No paid services, no subscriptions.
@@ -157,9 +180,7 @@ of salt.
 ## Open decisions
 
 - None blocking. The minimal UI (recipes, lists, catalog, import) is in place.
-
-**The plan for finishing v1 is [docs/roadmap.md](docs/roadmap.md)**, broken into
-chunks of about one chat each. Next up is chunk 1: deploy to GitHub Pages and
-make it load without a signal.
+  Next up is [roadmap](docs/roadmap.md) chunk 1: deploy to GitHub Pages and make
+  it load without a signal.
 
 Recipe editing and creation is **after v1**, not part of the MVP.
