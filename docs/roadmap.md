@@ -11,14 +11,15 @@ the plan. The **Start with** line is meant to be pasted in as the first message.
 
 Done: the working copy (`db.js`), merge and sync (`merge.js`, `sync.js`, proven
 against an in-memory adapter), recipes with scaling and ratings, shopping lists
-with combining and the catalog, and JSON import.
+with combining and the catalog, JSON import, and a service worker (`sw.js`)
+that opens the app with no signal.
 
-125 tests: 77 run under `npm test`, and 48 need a browser (IndexedDB), so they
+127 tests: 79 run under `npm test`, and 48 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session.
 
 Missing: any real storage backend, so nothing leaves the browser it was typed
-into. Also not deployed anywhere, and it does not yet load without a signal.
+into.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
@@ -64,6 +65,21 @@ accident in a fresh session, and each one exists for a reason.
 - **Never `await` between two requests in one IndexedDB transaction**; the
   transaction can go inactive. Chain through `onsuccess` instead, as
   `db.saveLocal` and `db.markSynced` do.
+- **A new file the app loads goes in `SHELL` in `sw.js`**, or the app opens
+  online but not in a shop. `test/shell.test.js` fails until it is listed.
+  Keep every import static, so a file the app needs is fetched at startup.
+
+**Offline**
+- The service worker serves the app cache-first and checks for a new version
+  itself, a few seconds after each open. A deploy reaches the phone on the
+  open after one that saw it, and a "new version is ready" banner offers to
+  reload sooner. Nothing to bump on deploy.
+- **On localhost the worker is off unless the URL has `?sw`**
+  (<http://localhost:8123/?sw>), so edits show on the next reload. Loading
+  without `?sw` removes it again; that first load can still be the cached
+  version, so reload once more.
+- To test offline for real, stop the server rather than using a browser toggle.
+  The page should still open, from the cache.
 
 **Data**
 - Records are written through `db.saveLocal` (marks it dirty, to push later) or
@@ -103,7 +119,22 @@ accident in a fresh session, and each one exists for a reason.
 
 ## 1. Put it on the web, and make it work with no signal
 
-**Status:** not started.
+**Status:** code done 2026-09-27; waiting on Pages being switched on, then the
+phone test. `sw.js` caches the shell; a manifest and icons make it installable.
+Verified locally with the server stopped: the app opened from the cache, and a
+check-off was saved. Also verified: an update reaches the page and offers a
+reload, and a deliberately broken deploy heals on the open after its fix.
+Not yet verified: the Pages URL, and a real phone in airplane mode.
+
+On an iPhone, add it to the home screen. Safari deletes a site's storage,
+IndexedDB included, after 7 days without a visit, and home-screen apps are
+exempt. Until sync exists, that storage is the only copy of your data.
+
+The update strategy differs from the one suggested below, on purpose.
+Network-first `index.html` does not help without a build step. The modules
+keep the same URLs, so a fresh `index.html` would still load stale modules
+from the cache. Instead, the whole shell is fetched as a set, named by its
+hash, and swapped in only once all of it has arrived.
 
 **Why first:** it is small, it proves the deployed paths work, and it gives you
 the HTTPS origin that chunk 2 has to register. You also get a URL you can open

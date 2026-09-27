@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full bleed, with the drawing inside the central circle a maskable icon keeps. -->
+  <rect width="512" height="512" fill="#b5532a"/>
+  <g fill="none" stroke="#fbf3ea" stroke-width="20" stroke-linecap="round">
+    <path d="M196 226c-18-17-18-33 0-50s18-33 0-50"/>
+    <path d="M256 226c-18-17-18-33 0-50s18-33 0-50"/>
+    <path d="M316 226c-18-17-18-33 0-50s18-33 0-50"/>
+  </g>
+  <rect x="112" y="254" width="288" height="24" rx="12" fill="#fbf3ea"/>
+  <path d="M130 274h252c0 64-50 116-126 116S130 338 130 274z" fill="#fbf3ea"/>
+</svg>

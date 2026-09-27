@@ -1,0 +1,8 @@
+{
+  "//": "The service worker runs in a worker, not a page: it needs the WebWorker library instead of DOM, and the two cannot share one program.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"]
+  },
+  "include": ["sw.js"]
+}

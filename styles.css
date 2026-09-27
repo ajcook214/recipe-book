@@ -201,6 +201,19 @@ textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-
 .empty .button { margin-top: 8px; }
 .empty pre { text-align: left; white-space: pre-wrap; color: var(--danger); }
 
+.update-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(688px, 100% - 32px);
+  margin: 12px auto 0;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
 #toast {
   position: fixed;
   left: 50%;

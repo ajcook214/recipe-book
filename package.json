@@ -6,7 +6,7 @@
   "scripts": {
     "start": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/serve.ps1",
     "test": "node --test \"test/**/*.test.js\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

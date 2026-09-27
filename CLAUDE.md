@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 77 Node tests
+npm test         # 79 Node tests
 npm run typecheck
 ```
 
@@ -179,8 +179,9 @@ of salt.
 
 ## Open decisions
 
-- None blocking. The minimal UI (recipes, lists, catalog, import) is in place.
-  Next up is [roadmap](docs/roadmap.md) chunk 1: deploy to GitHub Pages and make
-  it load without a signal.
+- None blocking. The minimal UI (recipes, lists, catalog, import) is in place,
+  and `sw.js` makes it open with no signal. Chunk 1 of the
+  [roadmap](docs/roadmap.md) waits only on Pages being switched on and a phone
+  test; see its Status line. Next up is chunk 2, the OAuth client ID.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

@@ -47,6 +47,12 @@ That serves the repo at <http://localhost:8123/> using `tools/serve.ps1`, which
 needs nothing beyond what ships with Windows. Change the port with
 `npm start -- -Port 8124`.
 
+The service worker (`sw.js`) that lets the deployed app open with no signal is
+off on localhost, so an edit shows on the next reload. Add `?sw` to the URL
+(<http://localhost:8123/?sw>) to run with it; loading without `?sw` removes
+it again. Every file the app loads must be listed in `SHELL` in `sw.js`, which
+`npm test` checks.
+
 ### Tests
 
 The same test files run two ways.

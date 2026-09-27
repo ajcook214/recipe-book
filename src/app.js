@@ -81,4 +81,48 @@ async function start() {
   await route();
 }
 
+/** The new version is already cached; the next open uses it either way. */
+function offerReload() {
+  if (document.querySelector('.update-ready')) return;
+  document.querySelector('.topbar')?.after(
+    h(
+      'div',
+      { class: 'update-ready', role: 'status' },
+      h('span', null, 'A new version is ready.'),
+      h('button', { type: 'button', onclick: () => location.reload() }, 'Reload'),
+    ),
+  );
+}
+
+/**
+ * Registers the service worker (sw.js) that lets the app open with no signal.
+ *
+ * On localhost it is opt-in with `?sw`, because a cache-first worker shows
+ * each edit one reload late. Without `?sw`, a worker left over from an earlier
+ * `?sw` visit is removed, along with its cache.
+ */
+async function setUpOffline() {
+  if (!('serviceWorker' in navigator)) return;
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  if (local && !new URLSearchParams(location.search).has('sw')) {
+    const scope = new URL('./', location.href).href;
+    for (const registration of await navigator.serviceWorker.getRegistrations()) {
+      if (registration.scope === scope) await registration.unregister();
+    }
+    for (const name of await caches.keys()) {
+      if (name.startsWith('recipe-book-shell-')) await caches.delete(name);
+    }
+    return;
+  }
+
+  // The worker looks for a newer version by itself each time the app opens.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data === 'updated') offerReload();
+  });
+  // addEventListener, unlike onmessage, does not start delivery by itself.
+  navigator.serviceWorker.startMessages();
+  await navigator.serviceWorker.register('sw.js');
+}
+
 void start();
+setUpOffline().catch((err) => console.warn('Offline support is unavailable.', err));
