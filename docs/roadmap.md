@@ -11,8 +11,11 @@ the plan. The **Start with** line is meant to be pasted in as the first message.
 
 Done: the working copy (`db.js`), merge and sync (`merge.js`, `sync.js`, proven
 against an in-memory adapter), recipes with scaling and ratings, shopping lists
-with combining and the catalog, and JSON import. 77 Node tests plus browser
-suites at `/test/browser/`.
+with combining and the catalog, and JSON import.
+
+125 tests: 77 run under `npm test`, and 48 need a browser (IndexedDB), so they
+skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
+green before and after every session.
 
 Missing: any real storage backend, so nothing leaves the browser it was typed
 into. Also not deployed anywhere, and it does not yet load without a signal.
@@ -31,7 +34,76 @@ in any order, or skip them; the app is usable without them.
 
 ---
 
+## Every session
+
+**Start:** read `CLAUDE.md` and this file's chunk. Run `npm start`, then
+`npm test`. Confirm green *before* changing anything, so a pre-existing failure
+is never mistaken for one you caused.
+
+**Finish:** `npm test`, `npm run typecheck`, the browser suite at
+<http://localhost:8123/test/browser/>, a real click-through of what changed,
+then commit and push. Update the **Status** line of the chunk.
+
+Paste this as the first message, with the chunk's own **Start with** line after
+it:
+
+> Read CLAUDE.md and docs/roadmap.md, including the working agreements.
+
+## Working agreements
+
+These are decisions already made and paid for. They are easy to break by
+accident in a fresh session, and each one exists for a reason.
+
+**Code**
+- Plain ES modules, no build step, no runtime dependencies. Every path stays
+  relative — the site is served from a subfolder.
+- `// @ts-check` and JSDoc on every file. `npm run typecheck` is strict and
+  must pass.
+- Build DOM with `h()` from `src/ui/dom.js`. **Never `innerHTML`** — recipe
+  content comes from the web.
+- **Never `await` between two requests in one IndexedDB transaction**; the
+  transaction can go inactive. Chain through `onsuccess` instead, as
+  `db.saveLocal` and `db.markSynced` do.
+
+**Data**
+- Records are written through `db.saveLocal` (marks it dirty, to push later) or
+  `db.saveFromSync`. Never mutate a stored record in place, and set
+  `updatedAt` on every edit or last-writer-wins breaks.
+- **Deletes are tombstones** (`deleted: true`), never removal from the store.
+  `forget()` exists only for pruning something already propagated.
+- List items are stored **one line per source** and combined only for display
+  (`groupItems`). `sort` is sparse integers, so moving one item writes one
+  number.
+- **Every destructive action confirms first**, and says what will happen.
+
+**Tests**
+- Test where data can be lost — merge, sync, import validation. Keep the rest
+  light. This is a personal project, not a product.
+- Tests stay **flat**: `test(name[, options], fn)`, no subtests or hooks, so
+  the same file runs in Node and in the browser.
+- Pure suites live in `test/`; browser-only suites live in `test/browser/`,
+  guard themselves with `{ skip: browserOnly }`, and are registered in the
+  `SUITES` array in `test/browser/index.html`.
+- For anything that can silently eat data, **check the failure path too**:
+  break it on purpose, confirm the tests go red, then put it back.
+
+**Phone**
+- Tap targets 44px or larger. Check at 375px wide and confirm
+  `document.documentElement.scrollWidth` still equals `clientWidth` — no
+  sideways scrolling.
+
+**Repo**
+- **Never commit recipe data.** The repo is public. Samples live in
+  `local-data/` (gitignored): five recipes in `import/`, a shopping list and a
+  catalog in `shopping/`. Load them from the Import screen.
+- Commit at the end of a chunk with everything green, and say plainly what was
+  verified and what was not.
+
+---
+
 ## 1. Put it on the web, and make it work with no signal
+
+**Status:** not started.
 
 **Why first:** it is small, it proves the deployed paths work, and it gives you
 the HTTPS origin that chunk 2 has to register. You also get a URL you can open
@@ -73,6 +145,8 @@ offline caching."
 
 ## 2. Google Cloud OAuth setup
 
+**Status:** not started.
+
 **Why:** chunk 3 cannot be tested without a client ID, and this is all clicking
 in a console rather than code.
 
@@ -99,6 +173,8 @@ client ID."
 ---
 
 ## 3. `DriveAdapter`
+
+**Status:** not started.
 
 **Why:** this is the last piece of storage. Everything above it is already
 written and tested.
@@ -137,6 +213,8 @@ the adapter contract."
 
 ## 4. Sign-in and the Sync screen
 
+**Status:** not started.
+
 **Why:** the point of the whole project. After this, the phone and the desktop
 hold the same data.
 
@@ -163,6 +241,8 @@ screen."
 
 ## 5. List and catalog editing
 
+**Status:** not started.
+
 **Why:** the gaps noticed while using the list screens.
 
 **Work**
@@ -183,6 +263,8 @@ editing."
 
 ## 6. Backup, pruning, archiving
 
+**Status:** not started.
+
 **Why:** small loose ends, one chat.
 
 **Work**
@@ -201,6 +283,26 @@ editing."
 **Start with:** "Read docs/roadmap.md chunk 6."
 
 ---
+
+## Known gaps, deliberately left
+
+Recorded so no session has to rediscover them:
+
+- **Tombstones are never pruned.** Deleted records and list items accumulate
+  forever (chunk 6).
+- **`archived` is filtered in the UI but never set.** Nothing can archive a
+  list yet (chunk 6).
+- **`manifest.json` is in the data layout and the schema, but nothing reads or
+  writes it.** Either write it on sync or drop it (chunk 6).
+- **`LocalFolderAdapter` is unbuilt**, deferred once the Import screen covered
+  bulk import.
+- **The sync watermark is the newest `modifiedTime` seen.** A file written
+  remotely during a sync pass, stamped earlier than that maximum, is missed
+  until it changes again. Effectively impossible with one person syncing by
+  hand, but it is a real edge.
+- **A rating once came back empty after a reload** and could not be reproduced;
+  the save path was verified working. If a rating ever vanishes, that is a
+  genuine bug, not a fluke.
 
 ## After v1
 
