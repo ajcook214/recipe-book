@@ -119,15 +119,15 @@ accident in a fresh session, and each one exists for a reason.
 
 ## 1. Put it on the web, and make it work with no signal
 
-**Status:** live at <https://ajcook214.github.io/recipe-book/> since
-2026-09-27; only the phone test remains. `sw.js` caches the shell; a manifest
+**Status:** done 2026-09-27. Live at <https://ajcook214.github.io/recipe-book/>,
+and it opens on the owner's phone in airplane mode. `sw.js` caches the shell; a manifest
 and icons make it installable. Verified locally with the server stopped: the
 app opened from the cache, and a check-off was saved. Also verified: an update
 reaches the page and offers a reload, and a deliberately broken deploy heals
 on the open after its fix. On Pages, the worker installs with scope
 `/recipe-book/`, and a reload loads the page and its files from the cache with
 nothing over the network. Its cache hash matches the one tested locally, so
-the files are byte-identical. Not yet verified: a real phone in airplane mode.
+the files are byte-identical.
 
 On an iPhone, add it to the home screen. Safari deletes a site's storage,
 IndexedDB included, after 7 days without a visit, and home-screen apps are
