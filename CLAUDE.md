@@ -180,7 +180,8 @@ of salt.
 ## Open decisions
 
 - None blocking. The minimal UI (recipes, lists, catalog, import) is live on
-  Pages, and `sw.js` makes it open with no signal. Next up is
-  [roadmap](docs/roadmap.md) chunk 2, the OAuth client ID.
+  Pages, and `sw.js` makes it open with no signal. The OAuth client ID is in
+  `src/config.js`. Next up is
+  [roadmap](docs/roadmap.md) chunk 3, `DriveAdapter`.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

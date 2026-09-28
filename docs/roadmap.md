@@ -179,7 +179,18 @@ offline caching."
 
 ## 2. Google Cloud OAuth setup
 
-**Status:** not started.
+**Status:** done 2026-09-27. `src/config.js` exports `GOOGLE_CLIENT_ID` and
+`DRIVE_SCOPE`, from the `recipe-book` Google Cloud project. Both origins were
+checked against Google directly. An authorize request with the token client's
+redirect form (`storagerelay://…`) reaches the sign-in page from
+`https://ajcook214.github.io` and from `http://localhost:8123`, while
+`http://localhost:9999` is refused with `redirect_uri_mismatch`. No sign-in was
+done; the first real token comes in chunk 4.
+
+No `config.local.js` is needed: one client carries both origins, so localhost
+and Pages use the same ID. Google deletes clients left unused for about six
+months; if sign-in fails with `invalid_client`, make a new one and replace the
+ID.
 
 **Why:** chunk 3 cannot be tested without a client ID, and this is all clicking
 in a console rather than code.

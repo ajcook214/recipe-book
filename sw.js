@@ -39,6 +39,7 @@ const SHELL = [
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
   'src/app.js',
+  'src/config.js',
   'src/core/db.js',
   'src/core/errors.js',
   'src/core/list.js',
