@@ -5,19 +5,8 @@ import { NotFoundError, VersionConflictError } from '../../src/core/errors.js';
  * An in-memory StorageAdapter, used to exercise sync without a filesystem or a
  * network. It is also the reference implementation of the adapter contract:
  * DriveAdapter and LocalFolderAdapter have to behave the same way, and where
- * they cannot, the difference belongs in a comment here.
- *
- * Contract:
- *   list(prefix, { modifiedSince }) -> [{ path, modifiedTime, version }]
- *       Every file whose path starts with `prefix`, sorted by path. When
- *       `modifiedSince` is set, only files modified strictly after it.
- *   read(path)  -> the parsed JSON document. Throws NotFoundError.
- *   write(path, data, { expectedVersion }) -> { version, modifiedTime }
- *       expectedVersion: a string means the stored version must match exactly;
- *       null means the caller expects no file to exist yet; undefined means
- *       write unconditionally. A mismatch throws VersionConflictError, which
- *       is the check that stops a push from clobbering a newer remote edit.
- *   remove(path) -> void. Silent when already absent.
+ * they cannot, the difference belongs in a comment here. The contract itself
+ * is written out, and tested, in adapter-contract.js.
  *
  * Timestamps come from a counter rather than the clock, so tests are
  * deterministic and ordering is never flaky.

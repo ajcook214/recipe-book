@@ -1,0 +1,80 @@
+/* Shared by the browser suite (index.html) and the real-Drive run (../drive/). */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --line: #e3e3e3;
+  --pass: #1a7f37;
+  --fail: #b3261e;
+  --skip: #8a6d00;
+  --code-bg: #f6f6f6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181a;
+    --fg: #e8e8e8;
+    --muted: #9a9a9a;
+    --line: #2c2f33;
+    --pass: #57ab5a;
+    --fail: #e5534b;
+    --skip: #d4a72c;
+    --code-bg: #1e2124;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 24px 16px 64px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+}
+main { max-width: 820px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+#summary {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+#summary.pass { border-color: var(--pass); color: var(--pass); }
+#summary.fail { border-color: var(--fail); color: var(--fail); }
+.suite { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+         color: var(--muted); margin: 22px 0 8px; }
+ol { list-style: none; margin: 0; padding: 0; }
+li { padding: 6px 0 6px 24px; border-bottom: 1px solid var(--line); position: relative; }
+li::before { position: absolute; left: 2px; font-weight: 700; }
+li.pass::before { content: "\2713"; color: var(--pass); }
+li.fail::before { content: "\2717"; color: var(--fail); }
+li.skip::before { content: "\2013"; color: var(--skip); }
+li.running::before { content: "\2026"; color: var(--muted); }
+li.skip { color: var(--muted); }
+pre {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 8px 0 2px;
+  overflow-x: auto;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--fail);
+  white-space: pre-wrap;
+}
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+       font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+a { color: inherit; }
+button {
+  font: inherit;
+  min-height: 44px;
+  padding: 8px 16px;
+  margin: 0 8px 16px 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--code-bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: default; }

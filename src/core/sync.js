@@ -29,7 +29,7 @@ import {
   typeForPath,
 } from './db.js';
 import { isSame, mergeCatalog, mergeList, mergeRecipe } from './merge.js';
-import { isNotFound, isVersionConflict, messageOf } from './errors.js';
+import { isAuthError, isNotFound, isVersionConflict, messageOf } from './errors.js';
 
 export const LAST_SYNC_KEY = 'lastSync';
 
@@ -130,6 +130,12 @@ async function resolveConflict(db, adapter, env, syncedAt) {
 /**
  * Run one sync pass.
  *
+ * Rejects with an AuthError when storage refuses the sign-in part way
+ * through, instead of recording it against every remaining file. What was
+ * already pulled or pushed stays done; the watermark is not advanced, so the
+ * next pass re-reads from where this one started, which merging makes
+ * harmless.
+ *
  * @param {IDBDatabase} db
  * @param {any} adapter
  * @param {{ now?: () => string }} [options]
@@ -165,6 +171,7 @@ export async function sync(db, adapter, options = {}) {
   try {
     entries = await adapter.list('', { modifiedSince: previous });
   } catch (err) {
+    if (isAuthError(err)) throw err;
     result.errors.push({ phase: 'list', path: '', message: messageOf(err) });
     result.lastSync = previous;
     result.dirtyRemaining = await countDirty(db);
@@ -206,6 +213,7 @@ export async function sync(db, adapter, options = {}) {
       result.pulled += 1;
       watermark = maxIso(watermark, entry.modifiedTime);
     } catch (err) {
+      if (isAuthError(err)) throw err;
       result.errors.push({ phase: 'pull', path: entry.path, message: messageOf(err) });
     }
   }
@@ -225,6 +233,7 @@ export async function sync(db, adapter, options = {}) {
       result.pushed += 1;
       watermark = maxIso(watermark, written?.modifiedTime);
     } catch (err) {
+      if (isAuthError(err)) throw err;
       if (!isVersionConflict(err)) {
         result.errors.push({ phase: 'push', path: env.path, message: messageOf(err) });
         continue;
@@ -237,6 +246,7 @@ export async function sync(db, adapter, options = {}) {
         result.pushed += 1;
         watermark = maxIso(watermark, modifiedTime);
       } catch (retryErr) {
+        if (isAuthError(retryErr)) throw retryErr;
         // Leave it dirty. It will be retried on the next sync.
         result.errors.push({ phase: 'push', path: env.path, message: messageOf(retryErr) });
       }

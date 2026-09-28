@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DriveAdapter on real Drive</title>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "node:test": "../browser/node-test.js",
+          "node:assert": "../browser/node-assert.js",
+          "node:assert/strict": "../browser/node-assert.js"
+        }
+      }
+    </script>
+
+    <link rel="stylesheet" href="../browser/style.css" />
+    <!-- Google's token client. Loading it shows nothing; sign-in opens only on a click. -->
+    <script id="gis" src="https://accounts.google.com/gsi/client" async></script>
+  </head>
+
+  <body>
+    <main>
+      <h1>DriveAdapter on real Google Drive</h1>
+      <p class="sub">
+        The adapter contract that <code>npm test</code> runs against a fake
+        Drive, run here against your real one. Signing in opens a Google
+        window asking to let Recipe Book use the files it creates in your
+        Drive, and nothing else. The token stays in this page and is gone when
+        you close it.
+      </p>
+      <p class="sub">
+        Each run writes to a folder of its own under
+        <code>My Drive / RecipeApp-tests /</code>, one subfolder per test, well
+        away from <code>RecipeApp/</code>. The files stay there for you to open
+        by hand. Delete <code>RecipeApp-tests</code> in the Drive web UI when
+        you are done; the API refuses to trash it (see docs/roadmap.md, known
+        gaps). Expect a minute or so and a few hundred requests.
+      </p>
+
+      <button id="run" type="button" disabled>Sign in with Google and run</button>
+
+      <div id="summary">Not run yet.</div>
+      <div id="results"></div>
+    </main>
+
+    <script type="module">
+      import { DRIVE_SCOPE, GOOGLE_CLIENT_ID } from '../../src/config.js';
+      import { createDriveAdapter } from '../../src/adapters/drive.js';
+      import { adapterContract } from '../helpers/adapter-contract.js';
+      import { runSuites } from '../browser/runner.js';
+
+      const TEST_ROOT = 'RecipeApp-tests';
+
+      const runButton = /** @type {HTMLButtonElement} */ (document.querySelector('#run'));
+      const summary = /** @type {HTMLElement} */ (document.querySelector('#summary'));
+      const results = /** @type {HTMLElement} */ (document.querySelector('#results'));
+
+      /** @type {string|null} */
+      let token = null;
+
+      /**
+       * Opens Google's sign-in window. Has to start inside the click, or the
+       * browser blocks the popup.
+       * @returns {Promise<string>}
+       */
+      function signIn() {
+        if (token) return Promise.resolve(token);
+        const oauth2 = /** @type {any} */ (window).google.accounts.oauth2;
+        return new Promise((resolve, reject) => {
+          const client = oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: DRIVE_SCOPE,
+            callback: (/** @type {any} */ response) => {
+              if (response.error) reject(new Error(response.error_description || response.error));
+              else if (!oauth2.hasGrantedAllScopes(response, DRIVE_SCOPE)) reject(new Error('Drive access was not granted.'));
+              else resolve((token = response.access_token));
+            },
+            error_callback: (/** @type {any} */ err) => reject(new Error(err?.message || err?.type || 'Sign-in failed')),
+          });
+          client.requestAccessToken();
+        });
+      }
+
+      runButton.addEventListener('click', async () => {
+        runButton.disabled = true;
+        try {
+          const accessToken = await signIn();
+
+          const run = new Date().toISOString().slice(0, 19).replaceAll(':', '-');
+          /** @type {WeakMap<object, string>} */
+          const rootOf = new WeakMap();
+          let count = 0;
+          /** @param {string} root */
+          const make = (root) => {
+            const adapter = createDriveAdapter({ getToken: () => accessToken, root });
+            rootOf.set(adapter, root);
+            return adapter;
+          };
+
+          summary.className = '';
+          summary.textContent = 'Running…';
+          results.replaceChildren();
+          const { failed } = await runSuites(
+            [
+              {
+                name: `drive (real) - My Drive / ${TEST_ROOT} / ${run}`,
+                load: async () =>
+                  adapterContract('drive (real)', {
+                    create: () => make(`${TEST_ROOT}/${run}/${String((count += 1)).padStart(2, '0')}`),
+                    sibling: (adapter) => make(/** @type {string} */ (rootOf.get(adapter))),
+                    // Drive keeps working on a file after a write returns.
+                    settle: () => new Promise((resolve) => setTimeout(resolve, 5000)),
+                  }),
+              },
+            ],
+            { summary, results },
+          );
+          summary.textContent += failed
+            ? ''
+            : `. Files are in My Drive / ${TEST_ROOT} / ${run}, one folder per test.`;
+        } catch (err) {
+          summary.className = 'fail';
+          summary.textContent = err instanceof Error ? err.message : String(err);
+        } finally {
+          runButton.disabled = false;
+        }
+      });
+
+      function ready() {
+        runButton.disabled = false;
+      }
+      if (/** @type {any} */ (window).google?.accounts?.oauth2) ready();
+      else document.querySelector('#gis')?.addEventListener('load', ready);
+    </script>
+  </body>
+</html>

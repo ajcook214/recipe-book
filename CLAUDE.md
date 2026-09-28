@@ -11,16 +11,18 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 79 Node tests
+npm test         # 124 Node tests
 npm run typecheck
 ```
 
 Node lives at `C:\Program Files\nodejs`; if `npm` is not found, prepend that to
 `PATH` for the call.
 
-The other 48 tests need a browser (IndexedDB) and skip under Node. Run them at
+The other 49 tests need a browser (IndexedDB) and skip under Node. Run them at
 <http://localhost:8123/test/browser/>. Both suites should be green before and
-after a session.
+after a session. The adapter contract against real Google Drive is at
+<http://localhost:8123/test/drive/>; it needs the owner's sign-in, so it is run
+by hand when `src/adapters/drive.js` changes.
 
 Sample data is in `local-data/` (gitignored): five recipes in `import/`, a
 shopping list and a catalog in `shopping/`. Load them from the Import screen.
@@ -82,7 +84,7 @@ RecipeApp/
    and `catalog.json` merge per *item* (LWW on each `items[].id` / `key`), because
    checking things off on the phone while the same list is open on the desktop is
    the most likely conflict in this app, and record-level LWW would discard one side.
-3. Push dirty local records, checking the remote file `version` before writing so a newer remote change isn't clobbered.
+3. Push dirty local records, checking the remote file `version` before writing so a newer remote change isn't clobbered. (On Drive the version is the file's `headRevisionId`; see `src/adapters/drive.js`.)
 4. Propagate deletes as tombstones rather than removing files immediately.
 5. The UI shows the pending (dirty) change count and the last sync time.
 
@@ -117,7 +119,8 @@ store aisle.
    against an in-memory adapter (`test/helpers/memory-adapter.js`).
 2. **Minimal UI** on the local IndexedDB working copy, so the app is usable
    offline on a phone before any sync exists.
-3. `DriveAdapter` and the Google sign-in flow.
+3. ~~`DriveAdapter`~~ — done. `src/adapters/drive.js` passes the adapter
+   contract against real Drive. Then the Google sign-in flow and Sync screen.
 
 `LocalFolderAdapter` is **deferred**. Its remaining value was bulk import, and
 the Import screen covers that.
@@ -181,7 +184,8 @@ of salt.
 
 - None blocking. The minimal UI (recipes, lists, catalog, import) is live on
   Pages, and `sw.js` makes it open with no signal. The OAuth client ID is in
-  `src/config.js`. Next up is
-  [roadmap](docs/roadmap.md) chunk 3, `DriveAdapter`.
+  `src/config.js`, and `DriveAdapter` passes the adapter contract against real
+  Drive. Next up is [roadmap](docs/roadmap.md) chunk 4, sign-in and the Sync
+  screen.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

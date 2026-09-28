@@ -39,6 +39,19 @@ export class NotFoundError extends Error {
 }
 
 /**
+ * Storage refused the credentials: the Google token expired or was revoked.
+ * Not a problem with any one record, so sync stops the pass rather than
+ * reporting every remaining file as failed. Signing in again and re-running
+ * sync is always safe; merges are idempotent.
+ */
+export class AuthError extends Error {
+  constructor(message = 'Google sign-in has expired. Sign in again to sync.') {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+/**
  * @param {unknown} err
  * @returns {err is VersionConflictError}
  */
@@ -52,6 +65,14 @@ export function isVersionConflict(err) {
  */
 export function isNotFound(err) {
   return err instanceof NotFoundError;
+}
+
+/**
+ * @param {unknown} err
+ * @returns {err is AuthError}
+ */
+export function isAuthError(err) {
+  return err instanceof AuthError;
 }
 
 /**

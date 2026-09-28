@@ -11,15 +11,18 @@ the plan. The **Start with** line is meant to be pasted in as the first message.
 
 Done: the working copy (`db.js`), merge and sync (`merge.js`, `sync.js`, proven
 against an in-memory adapter), recipes with scaling and ratings, shopping lists
-with combining and the catalog, JSON import, and a service worker (`sw.js`)
-that opens the app with no signal.
+with combining and the catalog, JSON import, a service worker (`sw.js`)
+that opens the app with no signal, and `DriveAdapter` (`src/adapters/drive.js`),
+passing the adapter contract against real Google Drive.
 
-127 tests: 79 run under `npm test`, and 48 need a browser (IndexedDB), so they
+173 tests: 124 run under `npm test`, and 49 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
-green before and after every session.
+green before and after every session. The adapter contract also runs against
+real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
+so run it by hand whenever `drive.js` changes.
 
-Missing: any real storage backend, so nothing leaves the browser it was typed
-into.
+Missing: sign-in and a Sync button, so nothing leaves the browser it was typed
+into yet.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
@@ -68,6 +71,9 @@ accident in a fresh session, and each one exists for a reason.
 - **A new file the app loads goes in `SHELL` in `sw.js`**, or the app opens
   online but not in a shop. `test/shell.test.js` fails until it is listed.
   Keep every import static, so a file the app needs is fetched at startup.
+- **Adapters throw `AuthError` when storage refuses the sign-in**, and `sync()`
+  rejects with it rather than logging a failure per file. Catch it and offer to
+  sign in again; re-running sync is always safe.
 
 **Offline**
 - The service worker serves the app cache-first and checks for a new version
@@ -85,6 +91,10 @@ accident in a fresh session, and each one exists for a reason.
 - Records are written through `db.saveLocal` (marks it dirty, to push later) or
   `db.saveFromSync`. Never mutate a stored record in place, and set
   `updatedAt` on every edit or last-writer-wins breaks.
+- **An adapter's version changes only when content is written.** Sync checks
+  each push against the version it last saw. On Drive that is the file's
+  `headRevisionId`. Drive's own `version` field moves by itself after a write
+  and would turn every push into a false conflict.
 - **Deletes are tombstones** (`deleted: true`), never removal from the store.
   `forget()` exists only for pruning something already propagated.
 - List items are stored **one line per source** and combined only for display
@@ -102,6 +112,11 @@ accident in a fresh session, and each one exists for a reason.
   `SUITES` array in `test/browser/index.html`.
 - For anything that can silently eat data, **check the failure path too**:
   break it on purpose, confirm the tests go red, then put it back.
+- **Every adapter runs the shared contract** in
+  `test/helpers/adapter-contract.js`. `DriveAdapter` runs it against a fake
+  Drive (`test/helpers/fake-drive.js`) under `npm test`, and against real Drive
+  at `test/drive/`. When real Drive shows something the fake missed, teach the
+  fake first, so `npm test` catches it from then on.
 
 **Phone**
 - Tap targets 44px or larger. Check at 375px wide and confirm
@@ -219,7 +234,36 @@ client ID."
 
 ## 3. `DriveAdapter`
 
-**Status:** not started.
+**Status:** done 2026-09-27. `src/adapters/drive.js` passes the adapter
+contract, now shared in `test/helpers/adapter-contract.js`. It runs against a
+fake Drive under `npm test`, and passed 22 of 22 against the owner's real Drive
+at `test/drive/`. A test file opened in the Drive web UI reads as plain,
+indented JSON.
+
+Decisions made in that chat:
+- **The version check is read, then write**, one round trip apart. Drive v3
+  has no conditional write (no `If-Match`, no precondition). A write from
+  another device that lands in that gap is overwritten. That device still holds
+  the edit, though, and its next sync pulls the newer file and merges its copy
+  back in. So the edit arrives one sync late rather than being lost.
+- **The version is `headRevisionId`, not Drive's `version` field.** The first
+  real run failed on this. `version` moved by itself after a write, which would
+  have made every push a false conflict. The fake Drive now does the same, and
+  a contract test waits five seconds on real Drive to check that only a write
+  moves the version. It also showed that every upload makes a new revision,
+  even when the content is the same.
+- **The path index lives in memory, not in the `meta` store.** A listing asks
+  for everything the app can see and rebuilds the index. Under `drive.file`
+  that is one or two requests. Sync always lists first, so a persisted index
+  could only ever be stale.
+- **Duplicates are resolved, not prevented.** Folders that share a path read
+  as one folder. Files that share a path resolve to the oldest, the same on
+  every device.
+- **`remove()` moves a file to the trash**, recoverable for 30 days.
+- **Errors:** a 401 is `AuthError`, and `sync()` now rejects with it (see the
+  working agreements). Rate limits (429, and 403 rate-limit reasons) are
+  retried with backoff. Server and network errors are retried for reads only,
+  because a failed upload may have landed anyway.
 
 **Why:** this is the last piece of storage. Everything above it is already
 written and tested.
@@ -278,6 +322,19 @@ same list. That is `sync.js`'s per-item merge doing its job for real.
 
 **Watch out:** test with the phone genuinely offline, not just the browser's
 offline toggle.
+
+**From chunk 3**
+- `createDriveAdapter({ getToken })` calls `getToken` on every request, so a
+  renewed token takes effect at once. It should throw `AuthError` when there
+  is no token.
+- `sync()` rejects with `AuthError` when Drive refuses the token. Catch it and
+  offer to sign in again.
+- `test/drive/index.html` has a working token-client sign-in to start from. It
+  checks `hasGrantedAllScopes`, since the user can untick Drive access on
+  Google's consent screen.
+- Delete `My Drive / RecipeApp-tests/` in the Drive web UI once it is no longer
+  useful. The app's listings include it, because the app created it, and only
+  filter it out afterwards.
 
 **Start with:** "Read docs/roadmap.md chunk 4 and build the sign-in and Sync
 screen."
@@ -344,7 +401,18 @@ Recorded so no session has to rediscover them:
 - **The sync watermark is the newest `modifiedTime` seen.** A file written
   remotely during a sync pass, stamped earlier than that maximum, is missed
   until it changes again. Effectively impossible with one person syncing by
-  hand, but it is a real edge.
+  hand, but it is a real edge. `DriveAdapter` lists every file on each sync
+  anyway, so sync could close this by comparing each file's version with the
+  one its envelope holds, instead of filtering on `modifiedTime`.
+- **Two devices creating the same path in the same moment leave two files in
+  Drive.** The adapter resolves them to the oldest, the same way on every
+  device, so nothing is corrupted. The newer copy is hidden, though, and its
+  content reaches Drive only when either device next changes that record. It
+  takes both devices syncing a new record within the same second.
+- **Trashing a folder through the Drive API fails** with
+  `403 appNotAuthorizedToChild`, seen on `RecipeApp-tests/` after two test
+  runs. Trashing single files works. The app never trashes folders, so this
+  was not pursued. Delete test folders in the Drive web UI.
 - **A rating once came back empty after a reload** and could not be reproduced;
   the save path was verified working. If a rating ever vanishes, that is a
   genuine bug, not a fluke.

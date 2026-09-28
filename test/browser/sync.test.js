@@ -14,6 +14,7 @@ import {
   saveLocal,
   setMeta,
 } from '../../src/core/db.js';
+import { AuthError } from '../../src/core/errors.js';
 import { LAST_SYNC_KEY, sync } from '../../src/core/sync.js';
 import { createMemoryAdapter } from '../helpers/memory-adapter.js';
 
@@ -309,6 +310,41 @@ test('one bad record does not stop the rest of the push', { skip: browserOnly },
     assert.equal(result.dirtyRemaining, 1);
     assert.ok(adapter._read('recipes/good.json'));
   });
+});
+
+test('an expired sign-in stops the pass, and signing in again finishes it', { skip: browserOnly }, async () => {
+  // Expiring part way through the pull, and part way through the push.
+  for (const phase of /** @type {const} */ (['read', 'write'])) {
+    await withDb(async (db) => {
+      const adapter = createMemoryAdapter();
+      adapter._seed('recipes/r1.json', recipe({ id: 'r1' }));
+      adapter._seed('recipes/r2.json', recipe({ id: 'r2' }));
+      await saveLocal(db, 'recipe', recipe({ id: 'r3' }));
+      await saveLocal(db, 'recipe', recipe({ id: 'r4' }));
+
+      let calls = 0;
+      const expiring = {
+        ...adapter,
+        /** @param {any[]} args */
+        [phase]: async (...args) => {
+          calls += 1;
+          if (calls === 2) throw new AuthError();
+          return /** @type {any} */ (adapter[phase])(...args);
+        },
+      };
+
+      await assert.rejects(() => sync(db, expiring, clock), AuthError, `${phase}: rejects as AuthError`);
+      assert.equal(calls, 2, `${phase}: nothing more was tried after the refusal`);
+      assert.equal(await getMeta(db, LAST_SYNC_KEY), undefined, `${phase}: the watermark did not move`);
+      assert.ok((await countDirty(db)) >= 1, `${phase}: unpushed edits are still waiting`);
+
+      const result = await sync(db, adapter, clock);
+      assert.deepEqual(result.errors, [], `${phase}: the second pass is clean`);
+      assert.equal(result.dirtyRemaining, 0);
+      assert.deepEqual(adapter._paths(), ['recipes/r1.json', 'recipes/r2.json', 'recipes/r3.json', 'recipes/r4.json']);
+      assert.ok(await getRecord(db, 'recipe', 'r2'), `${phase}: the pull finished too`);
+    });
+  }
 });
 
 // --- merging on pull -------------------------------------------------------
