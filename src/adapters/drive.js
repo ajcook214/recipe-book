@@ -244,7 +244,10 @@ export function createDriveAdapter(options) {
         await sleep(wait);
         continue;
       }
-      throw new Error(`Google Drive ${response.status}: ${failure.message}`);
+      // Drive's reason (appNotAuthorizedToFile, storageQuotaExceeded...) is
+      // often the only useful part, so it goes in the message the user sees.
+      const reason = failure.reason ? ` (${failure.reason})` : '';
+      throw new Error(`Google Drive ${response.status}${reason}: ${failure.message}`);
     }
   }
 

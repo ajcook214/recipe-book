@@ -15,7 +15,7 @@ import {
   setMeta,
 } from '../../src/core/db.js';
 import { AuthError } from '../../src/core/errors.js';
-import { LAST_SYNC_KEY, sync } from '../../src/core/sync.js';
+import { LAST_RUN_KEY, LAST_SYNC_KEY, sync } from '../../src/core/sync.js';
 import { createMemoryAdapter } from '../helpers/memory-adapter.js';
 
 /**
@@ -206,6 +206,65 @@ test('a record whose id disagrees with its path is reported, not stored', { skip
   });
 });
 
+test('a file that fails to pull is pulled again next time', { skip: browserOnly }, async () => {
+  // A newer file pulling fine in the same pass must not carry the watermark
+  // past the one that failed, or it is not listed again until it changes.
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    adapter._seed('recipes/r1.json', recipe({ id: 'r1', title: 'Failed once' }));
+    adapter._seed('recipes/r2.json', recipe({ id: 'r2' }));
+
+    // The first read of r1 fails, as one can on a weak signal.
+    let failed = false;
+    const flaky = {
+      ...adapter,
+      /** @param {string} path */
+      read: async (path) => {
+        if (path === 'recipes/r1.json' && !failed) {
+          failed = true;
+          throw new Error('Could not reach Google Drive');
+        }
+        return adapter.read(path);
+      },
+    };
+
+    const first = await sync(db, flaky, clock);
+    assert.equal(first.errors.length, 1);
+    assert.equal(first.pulled, 1, 'the other file still came in');
+
+    const second = await sync(db, flaky, clock);
+    assert.deepEqual(second.errors, []);
+    assert.equal((await getRecord(db, 'recipe', 'r1'))?.title, 'Failed once', 'it arrived on the next sync');
+  });
+});
+
+test('a pass records when it ran and what it did', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    adapter._seed('recipes/r1.json', recipe());
+    await saveLocal(db, 'recipe', recipe({ id: 'r2' }));
+
+    const result = await sync(db, adapter, clock);
+    assert.deepEqual(await getMeta(db, LAST_RUN_KEY), { at: NOW, ...result });
+  });
+});
+
+test('a pass that cannot reach storage is not recorded as a sync', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    const offline = {
+      ...adapter,
+      list: async () => {
+        throw new Error('Could not reach Google Drive: Failed to fetch');
+      },
+    };
+
+    const result = await sync(db, offline, clock);
+    assert.equal(result.errors[0]?.phase, 'list');
+    assert.equal(await getMeta(db, LAST_RUN_KEY), undefined);
+  });
+});
+
 test('the watermark only advances to times storage reported', { skip: browserOnly }, async () => {
   await withDb(async (db) => {
     const adapter = createMemoryAdapter();
@@ -336,6 +395,7 @@ test('an expired sign-in stops the pass, and signing in again finishes it', { sk
       await assert.rejects(() => sync(db, expiring, clock), AuthError, `${phase}: rejects as AuthError`);
       assert.equal(calls, 2, `${phase}: nothing more was tried after the refusal`);
       assert.equal(await getMeta(db, LAST_SYNC_KEY), undefined, `${phase}: the watermark did not move`);
+      assert.equal(await getMeta(db, LAST_RUN_KEY), undefined, `${phase}: not recorded as a sync`);
       assert.ok((await countDirty(db)) >= 1, `${phase}: unpushed edits are still waiting`);
 
       const result = await sync(db, adapter, clock);

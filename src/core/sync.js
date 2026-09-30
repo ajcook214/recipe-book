@@ -33,6 +33,9 @@ import { isAuthError, isNotFound, isVersionConflict, messageOf } from './errors.
 
 export const LAST_SYNC_KEY = 'lastSync';
 
+/** Meta key for the SyncRun of the last pass that reached storage. */
+export const LAST_RUN_KEY = 'lastRun';
+
 /** @type {Record<RecordType, (local: any, remote: any) => any>} */
 const MERGERS = {
   recipe: mergeRecipe,
@@ -57,6 +60,13 @@ const MERGERS = {
  * @property {SyncError[]} errors
  * @property {string|null} lastSync      New watermark, or the old one.
  * @property {number} dirtyRemaining     Still pending after this run.
+ */
+
+/**
+ * A SyncResult with the time it finished, by this device's clock. Stored
+ * under LAST_RUN_KEY for the Sync screen; never used as a watermark.
+ *
+ * @typedef {SyncResult & { at: string }} SyncRun
  */
 
 /**
@@ -136,6 +146,9 @@ async function resolveConflict(db, adapter, env, syncedAt) {
  * next pass re-reads from where this one started, which merging makes
  * harmless.
  *
+ * A pass that reaches storage is recorded under LAST_RUN_KEY, whatever it
+ * found. One that cannot list, or is refused, is not.
+ *
  * @param {IDBDatabase} db
  * @param {any} adapter
  * @param {{ now?: () => string }} [options]
@@ -163,6 +176,7 @@ export async function sync(db, adapter, options = {}) {
   // to this device's clock. Two devices with skewed clocks would otherwise
   // skip each other's changes on the next pull.
   let watermark = previous;
+  let pullFailed = false;
 
   // --- 1. Pull -------------------------------------------------------------
 
@@ -214,6 +228,7 @@ export async function sync(db, adapter, options = {}) {
       watermark = maxIso(watermark, entry.modifiedTime);
     } catch (err) {
       if (isAuthError(err)) throw err;
+      pullFailed = true;
       result.errors.push({ phase: 'pull', path: entry.path, message: messageOf(err) });
     }
   }
@@ -253,13 +268,23 @@ export async function sync(db, adapter, options = {}) {
     }
   }
 
-  // --- 3. Record the watermark --------------------------------------------
+  // --- 3. Record the watermark, and the pass -------------------------------
+
+  // A file that failed to pull has to be listed again next time, and a newer
+  // file pulled or pushed in this pass may have carried the watermark past
+  // it. So it stays put. The next pass re-reads what this one merged, which
+  // merging makes harmless, and a file that keeps failing keeps being reported.
+  if (pullFailed) watermark = previous;
 
   if (watermark && watermark !== previous) {
     await setMeta(db, LAST_SYNC_KEY, watermark);
   }
   result.lastSync = watermark;
   result.dirtyRemaining = await countDirty(db);
+
+  /** @type {SyncRun} */
+  const run = { at: syncedAt, ...result };
+  await setMeta(db, LAST_RUN_KEY, run);
 
   return result;
 }

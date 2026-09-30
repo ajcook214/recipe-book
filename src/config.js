@@ -19,3 +19,12 @@ export const GOOGLE_CLIENT_ID = '1015346435916-g9sqgcffkc35vprffi8bmjpthk0n9jik.
  * by Google, and it cannot see anything else in the Drive.
  */
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+/** The folder in My Drive holding the real data, synced by the app on Pages. */
+export const DRIVE_FOLDER = 'RecipeApp';
+
+/**
+ * The folder a copy served from localhost syncs with instead, so trying
+ * things out in development never touches the real data.
+ */
+export const DEV_DRIVE_FOLDER = 'RecipeApp-dev';

@@ -1,11 +1,12 @@
 // @ts-check
-import { openDatabase } from './core/db.js';
+import { changes, countDirty, openDatabase } from './core/db.js';
 import { h } from './ui/dom.js';
 import * as recipesView from './ui/views/recipes.js';
 import * as recipeView from './ui/views/recipe.js';
 import * as importView from './ui/views/import.js';
 import * as listsView from './ui/views/lists.js';
 import * as listView from './ui/views/list.js';
+import * as syncView from './ui/views/sync.js';
 
 /**
  * App shell: opens the working copy and routes hash URLs to views.
@@ -19,10 +20,13 @@ const ROUTES = [
   [/^#\/lists$/, listsView.render, 'lists'],
   [/^#\/list\/([^/]+)$/, listView.render, 'lists'],
   [/^#\/import$/, importView.render, 'import'],
+  [/^#\/sync$/, syncView.render, 'sync'],
 ];
 
 const main = /** @type {HTMLElement} */ (document.querySelector('main'));
 const toast = /** @type {HTMLElement} */ (document.querySelector('#toast'));
+const syncLink = /** @type {HTMLElement} */ (document.querySelector('nav a[data-section="sync"]'));
+const pendingBadge = /** @type {HTMLElement} */ (document.querySelector('#pending'));
 
 /** @type {ReturnType<typeof setTimeout>|undefined} */
 let toastTimer;
@@ -68,6 +72,30 @@ async function route() {
   }
 }
 
+let counting = false;
+
+/**
+ * The pending-change count on the Sync link, so it is in sight on every
+ * screen, shopping included. Recounted at most every 100 ms, since a sync
+ * writes many records in a row. A timer rather than a frame callback, which
+ * stops while the page is hidden, as it is behind Google's sign-in window.
+ */
+function showPending() {
+  if (counting) return;
+  counting = true;
+  setTimeout(async () => {
+    counting = false;
+    try {
+      const n = await countDirty(db);
+      pendingBadge.textContent = String(n);
+      pendingBadge.hidden = n === 0;
+      syncLink.setAttribute('aria-label', n ? `Sync, ${n} change${n === 1 ? '' : 's'} waiting` : 'Sync');
+    } catch (err) {
+      console.warn('Could not count pending changes.', err);
+    }
+  }, 100);
+}
+
 async function start() {
   try {
     db = await openDatabase();
@@ -77,6 +105,8 @@ async function start() {
     );
     return;
   }
+  changes.addEventListener('change', showPending);
+  showPending();
   window.addEventListener('hashchange', route);
   await route();
 }

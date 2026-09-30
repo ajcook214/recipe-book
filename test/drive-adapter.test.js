@@ -255,7 +255,7 @@ test('drive: a permission refusal is not mistaken for a rate limit', async () =>
   const drive = createFakeDrive();
   const adapter = adapterOn(drive);
   drive.fail({ status: 403, reason: 'appNotAuthorizedToFile' });
-  await assert.rejects(() => adapter.list(), /Google Drive 403/);
+  await assert.rejects(() => adapter.list(), /Google Drive 403 \(appNotAuthorizedToFile\)/, 'the reason is in the message');
   assert.equal(drive.requests.length, 1);
 });
 

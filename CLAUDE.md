@@ -18,7 +18,7 @@ npm run typecheck
 Node lives at `C:\Program Files\nodejs`; if `npm` is not found, prepend that to
 `PATH` for the call.
 
-The other 49 tests need a browser (IndexedDB) and skip under Node. Run them at
+The other 52 tests need a browser (IndexedDB) and skip under Node. Run them at
 <http://localhost:8123/test/browser/>. Both suites should be green before and
 after a session. The adapter contract against real Google Drive is at
 <http://localhost:8123/test/drive/>; it needs the owner's sign-in, so it is run
@@ -120,7 +120,8 @@ store aisle.
 2. **Minimal UI** on the local IndexedDB working copy, so the app is usable
    offline on a phone before any sync exists.
 3. ~~`DriveAdapter`~~ — done. `src/adapters/drive.js` passes the adapter
-   contract against real Drive. Then the Google sign-in flow and Sync screen.
+   contract against real Drive. The Google sign-in flow (`src/ui/auth.js`)
+   and the Sync screen (`src/ui/views/sync.js`) are built too.
 
 `LocalFolderAdapter` is **deferred**. Its remaining value was bulk import, and
 the Import screen covers that.
@@ -183,9 +184,9 @@ of salt.
 ## Open decisions
 
 - None blocking. The minimal UI (recipes, lists, catalog, import) is live on
-  Pages, and `sw.js` makes it open with no signal. The OAuth client ID is in
-  `src/config.js`, and `DriveAdapter` passes the adapter contract against real
-  Drive. Next up is [roadmap](docs/roadmap.md) chunk 4, sign-in and the Sync
-  screen.
+  Pages, and `sw.js` makes it open with no signal. Sign-in and the Sync screen
+  work against real Drive. localhost syncs with `RecipeApp-dev`, and only
+  Pages with the real `RecipeApp`. What's left of [roadmap](docs/roadmap.md)
+  chunk 4 is the two-device check on Pages.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

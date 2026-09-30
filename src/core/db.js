@@ -49,6 +49,17 @@ const BY_DIRTY = 'by_dirty';
 export const CATALOG_ID = 'catalog';
 
 /**
+ * Fires "change" after any write to the records store commits, from a view or
+ * from sync, so the pending count in the top bar can follow edits made
+ * anywhere in the app without every view having to report them.
+ */
+export const changes = new EventTarget();
+
+function changed() {
+  changes.dispatchEvent(new Event('change'));
+}
+
+/**
  * @template T
  * @param {IDBRequest<T>} request
  * @returns {Promise<T>}
@@ -222,6 +233,7 @@ export async function saveLocal(db, type, record) {
 
   await txDone(tx);
   if (!written) throw new Error(`saveLocal(${path}) committed without writing`);
+  changed();
   return written;
 }
 
@@ -259,6 +271,7 @@ export async function saveFromSync(db, type, record, remote = {}) {
   const tx = db.transaction(RECORDS, 'readwrite');
   tx.objectStore(RECORDS).put(written);
   await txDone(tx);
+  changed();
   return written;
 }
 
@@ -293,6 +306,7 @@ export async function markSynced(db, path, remote = {}) {
   };
 
   await txDone(tx);
+  changed();
   return written;
 }
 
@@ -386,6 +400,7 @@ export async function forget(db, path) {
   const tx = db.transaction(RECORDS, 'readwrite');
   tx.objectStore(RECORDS).delete(path);
   await txDone(tx);
+  changed();
 }
 
 /**
@@ -422,4 +437,5 @@ export async function clearAll(db) {
   tx.objectStore(RECORDS).clear();
   tx.objectStore(META).clear();
   await txDone(tx);
+  changed();
 }

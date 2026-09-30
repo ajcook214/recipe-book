@@ -60,20 +60,46 @@ h2 { font-size: 1.1rem; margin: 28px 0 10px; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  padding: calc(6px + env(safe-area-inset-top)) 16px 6px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-.brand { font-weight: 700; color: var(--fg); text-decoration: none; }
+.brand { font-weight: 700; color: var(--fg); text-decoration: none; white-space: nowrap; }
 nav { display: flex; gap: 4px; }
 nav a {
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 12px;
   border-radius: 999px;
   color: var(--muted);
   text-decoration: none;
   font-size: 0.95rem;
+  white-space: nowrap;
+}
+/* Four links and a count do not fit beside the name on a phone; Recipes is home anyway. */
+@media (max-width: 440px) {
+  .brand { display: none; }
 }
 nav a[aria-current] { background: var(--surface); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+
+/* Pending changes, on the Sync link. */
+.badge {
+  display: inline-block;
+  min-width: 1.5em;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+}
+.badge[hidden] { display: none; }
 
 /* --- controls --- */
 
@@ -97,6 +123,7 @@ button, .button, select {
   font-weight: 600;
 }
 button.danger { color: var(--danger); }
+button:disabled { opacity: 0.6; cursor: default; }
 
 input[type="search"], textarea {
   width: 100%;
@@ -194,6 +221,40 @@ textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-
 .import-results .ok .result-mark { color: var(--ok); font-weight: 700; }
 .import-results .error .result-mark { color: var(--danger); font-weight: 700; }
 .warnings { margin: 6px 0 0; padding-left: 1.2em; color: var(--muted); font-size: 0.9rem; }
+
+/* --- sync --- */
+
+.sync-status { list-style: none; margin: 8px 0 16px; padding: 0; color: var(--muted); }
+.sync-status li { padding: 2px 0; }
+.sync-status .pending { color: var(--fg); font-weight: 600; }
+
+.sync-hint, .sync-problem {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.sync-problem { border-color: var(--danger); }
+.sync-problem strong, .sync-trouble { color: var(--danger); }
+.sync-problem p { margin: 4px 0 0; }
+
+.sync-report h2 { margin-top: 32px; }
+.sync-report p { margin: 6px 0; }
+
+pre.detail {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 0.8rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  user-select: text;
+}
+.sync-report pre.detail { background: var(--surface); border: 1px solid var(--line); }
+
+.small-print { margin-top: 32px; font-size: 0.85rem; }
 
 /* --- empty states, toast --- */
 

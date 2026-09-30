@@ -12,17 +12,18 @@ the plan. The **Start with** line is meant to be pasted in as the first message.
 Done: the working copy (`db.js`), merge and sync (`merge.js`, `sync.js`, proven
 against an in-memory adapter), recipes with scaling and ratings, shopping lists
 with combining and the catalog, JSON import, a service worker (`sw.js`)
-that opens the app with no signal, and `DriveAdapter` (`src/adapters/drive.js`),
-passing the adapter contract against real Google Drive.
+that opens the app with no signal, `DriveAdapter` (`src/adapters/drive.js`),
+passing the adapter contract against real Google Drive, and Google sign-in
+(`src/ui/auth.js`) with a Sync screen (`src/ui/views/sync.js`).
 
-173 tests: 124 run under `npm test`, and 49 need a browser (IndexedDB), so they
+176 tests: 124 run under `npm test`, and 52 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
 so run it by hand whenever `drive.js` changes.
 
-Missing: sign-in and a Sync button, so nothing leaves the browser it was typed
-into yet.
+Missing for v1: only the two-device check that closes chunk 4. Chunks 5 and 6
+are polish.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
@@ -74,6 +75,10 @@ accident in a fresh session, and each one exists for a reason.
 - **Adapters throw `AuthError` when storage refuses the sign-in**, and `sync()`
   rejects with it rather than logging a failure per file. Catch it and offer to
   sign in again; re-running sync is always safe.
+- **`requestAccessToken()` runs straight from the tap**, with nothing awaited
+  before it, or the browser blocks Google's window. That is why Google's
+  script is loaded when the Sync screen opens, and the button waits for it.
+- **The Google token lives in `auth.js`'s memory only.** Never persist it.
 
 **Offline**
 - The service worker serves the app cache-first and checks for a new version
@@ -86,6 +91,9 @@ accident in a fresh session, and each one exists for a reason.
   version, so reload once more.
 - To test offline for real, stop the server rather than using a browser toggle.
   The page should still open, from the cache.
+- **Google's sign-in script is not part of the shell** and must never go in
+  `index.html`. It loads when the Sync screen opens, so a start with no signal
+  never waits on Google.
 
 **Data**
 - Records are written through `db.saveLocal` (marks it dirty, to push later) or
@@ -97,6 +105,12 @@ accident in a fresh session, and each one exists for a reason.
   and would turn every push into a false conflict.
 - **Deletes are tombstones** (`deleted: true`), never removal from the store.
   `forget()` exists only for pruning something already propagated.
+- **localhost syncs with `My Drive / RecipeApp-dev`**, and only Pages syncs
+  with the real `RecipeApp` (`DEV_DRIVE_FOLDER` in `src/config.js`). Trying
+  things out, or a sync bug under development, never touches the real data.
+  The Sync screen says which folder it uses.
+- **The sync watermark never passes a file that failed to pull.** If any pull
+  fails, it stays where it was, so the file is listed again next time.
 - List items are stored **one line per source** and combined only for display
   (`groupItems`). `sort` is sparse integers, so moving one item writes one
   number.
@@ -302,7 +316,32 @@ the adapter contract."
 
 ## 4. Sign-in and the Sync screen
 
-**Status:** not started.
+**Status:** built 2026-09-30; the two-device check is still to do. On
+localhost, a real Google sign-in pushed the owner's 7 sample records to
+`My Drive / RecipeApp-dev/`. Every other path was clicked through in the
+browser pane against a stand-in token client and the fake Drive: a second
+device's edit and check-off pulled with no new sign-in, a hand-broken file
+reported and then pulled once fixed, a token refused part way through, a
+closed sign-in window, Drive access unticked, offline, Drive unreachable,
+leaving the screen mid-sync, and the layout at 375px. **Still to verify:** the
+Done-when below, on Pages, desktop and phone.
+
+Decisions made in that chat:
+- **localhost syncs with `RecipeApp-dev`**, Pages with `RecipeApp` (see the
+  working agreements).
+- **A failed pull holds the watermark.** Before, a newer file pulled in the
+  same pass carried the watermark past the one that failed, and it was not
+  listed again until it changed. A weak signal in a shop makes that likely.
+- **Each pass that reaches storage is stored as a `SyncRun`** (meta key
+  `lastRun`: the `SyncResult` plus when it ran), so the Sync screen shows the
+  last report after a reload.
+- **The pending count updates live** from `db.changes`, an `EventTarget` that
+  fires after each write to the records store commits.
+- **Sign-in uses `prompt: ''`**: consent the first time, then a window that
+  closes by itself.
+- Drive's error reason is now in the message (`Google Drive 403
+  (storageQuotaExceeded): …`). Nav links are now 44px tall, and the brand hides
+  below 440px wide so four links and the count fit on one line.
 
 **Why:** the point of the whole project. After this, the phone and the desktop
 hold the same data.
@@ -372,6 +411,11 @@ editing."
 **Work**
 - **Export everything** as a zip or a single JSON file. The data-ownership goal
   deserves a one-click exit that does not depend on Drive.
+- **Use the export as a clean dev data set** (the owner's idea). Once the real
+  data is good, an export kept in `local-data/` (gitignored) and imported on
+  localhost gives development a known, managed copy of it, which syncs to
+  `RecipeApp-dev` and never to the real folder. The Import screen probably
+  needs to accept the export's format for this.
 - **Prune tombstones.** Deleted records and list items accumulate forever right
   now. Drop them once they are older than the last sync by some margin, so a
   delete cannot come back from a device that has not synced recently.
@@ -413,6 +457,9 @@ Recorded so no session has to rediscover them:
   `403 appNotAuthorizedToChild`, seen on `RecipeApp-tests/` after two test
   runs. Trashing single files works. The app never trashes folders, so this
   was not pursued. Delete test folders in the Drive web UI.
+- **Sign-in from an iPhone home-screen app is untested.** Google's popup may
+  not work there. The owner does not use an iPhone, so this is very low
+  priority.
 - **A rating once came back empty after a reload** and could not be reproduced;
   the save path was verified working. If a rating ever vanishes, that is a
   genuine bug, not a fluke.

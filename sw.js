@@ -50,12 +50,14 @@ const SHELL = [
   'src/core/sync.js',
   'src/core/types.js',
   'src/core/units.js',
+  'src/ui/auth.js',
   'src/ui/dom.js',
   'src/ui/views/import.js',
   'src/ui/views/list.js',
   'src/ui/views/lists.js',
   'src/ui/views/recipe.js',
   'src/ui/views/recipes.js',
+  'src/ui/views/sync.js',
 ];
 
 /**
