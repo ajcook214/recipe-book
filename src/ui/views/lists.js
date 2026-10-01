@@ -31,6 +31,13 @@ export async function render(ctx) {
     'New list',
   );
 
+  const commonItems = h(
+    'p',
+    { class: 'more-links' },
+    h('a', { href: '#/catalog' }, 'Common items'),
+    h('span', { class: 'muted' }, ': the quick-add buttons on every list'),
+  );
+
   if (lists.length === 0) {
     return h(
       'section',
@@ -38,6 +45,7 @@ export async function render(ctx) {
       h('h1', null, 'No shopping lists yet'),
       h('p', null, 'Start one here, or add a recipe to a list from its page.'),
       create,
+      commonItems,
     );
   }
 
@@ -64,6 +72,7 @@ export async function render(ctx) {
         );
       }),
     ),
+    commonItems,
   );
 }
 

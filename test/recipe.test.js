@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { keepBoth, normalizeRecipe, placeRecipe, recipeIdFor, slugify } from '../src/core/recipe.js';
-import { displayUnit, formatAmount, formatQty } from '../src/core/quantity.js';
+import { displayUnit, formatAmount, formatQty, normalizeUnit, parseQty } from '../src/core/quantity.js';
 
 const fixed = { now: () => '2026-09-21T00:00:00.000Z', newId: () => 'new-id' };
 
@@ -200,4 +200,42 @@ test('formatAmount scales scalable ingredients only', () => {
   assert.equal(formatAmount(beef, 2), '3 lb');
   assert.equal(formatAmount(leaf, 2), '1');
   assert.equal(formatAmount({ ...beef, qty: null }, 2), '');
+});
+
+test('typed amounts parse the ways a person writes them', () => {
+  assert.equal(parseQty('2'), 2);
+  assert.equal(parseQty(' 1.5 '), 1.5);
+  assert.equal(parseQty('1,5'), 1.5);
+  assert.equal(parseQty('.5'), 0.5);
+  assert.equal(parseQty('3/4'), 0.75);
+  assert.equal(parseQty('1 1/2'), 1.5);
+  assert.equal(parseQty('1½'), 1.5);
+  assert.equal(parseQty('1 ½'), 1.5);
+  assert.equal(parseQty('⅓'), 1 / 3);
+});
+
+test('a blank amount is no amount, and nonsense is refused rather than guessed', () => {
+  assert.equal(parseQty(''), null);
+  assert.equal(parseQty('   '), null);
+  for (const bad of ['0', 'lots', '1/0', '2 lb', '-1', '1.2.3', '1,000']) {
+    assert.equal(parseQty(bad), undefined, bad);
+  }
+});
+
+test('every amount formatQty shows parses back to what it shows', () => {
+  for (const qty of [0.125, 0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1, 1.5, 2.25, 1.42, 0.07, 20, 36]) {
+    const shown = formatQty(qty);
+    assert.equal(formatQty(/** @type {number} */ (parseQty(shown))), shown, shown);
+  }
+});
+
+test('typed units are stored singular and short, so they combine', () => {
+  assert.equal(normalizeUnit(' Cups '), 'cup');
+  assert.equal(normalizeUnit('lbs.'), 'lb');
+  assert.equal(normalizeUnit('Tablespoons'), 'tbsp');
+  assert.equal(normalizeUnit('loaves'), 'loaf');
+  assert.equal(normalizeUnit('oz'), 'oz');
+  assert.equal(normalizeUnit('dozen'), 'dozen');
+  assert.equal(normalizeUnit('punnet'), 'punnet', 'anything else is kept as typed');
+  assert.equal(normalizeUnit(''), null);
 });

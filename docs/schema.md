@@ -131,6 +131,11 @@ staples can be unticked before anything is stored.
 Deleted items are tombstoned in place (`deleted: true` on the item) until the
 list itself is pruned, so a delete on one device survives a merge with another.
 
+Renaming a row in the app gives each line behind it the new text and that
+text's key, so a fixed typo combines with the real thing. Moving a row gives
+every line behind it the same `sort`, since a row sits where its lowest line
+does.
+
 ## `catalog.json`
 
 A single file, not one per item — a few hundred staples as individual files
@@ -159,3 +164,9 @@ entry on `key`.
 The catalog self-populates: adding a free-form item to a list creates or bumps
 a catalog entry for its key, so the things you actually buy drift to the top
 without any curation.
+
+`key` never changes once an entry exists. Renaming one changes its `label`
+only, so lines already on a list still match it, and typing either the new
+name or the old one finds it. That is the one place a key can stop matching
+its own name. Deleting an entry forgets it: adding the item to a list again
+starts it over, unpinned and at one use.

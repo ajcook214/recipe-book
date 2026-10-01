@@ -324,7 +324,7 @@ pre.detail {
 .list-name:focus { outline: none; border-bottom-color: var(--accent); }
 
 .add-form { display: flex; gap: 8px; }
-.add-form input {
+.add-form input, .field input {
   flex: 1;
   min-width: 0;
   min-height: var(--tap);
@@ -389,6 +389,65 @@ pre.detail {
 
 button.small { min-height: 34px; padding: 0 12px; font-size: 0.9rem; }
 .footer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.more-links { margin-top: 24px; }
+
+/* --- editing a list, and the common items --- */
+
+.page-head .list-name { flex: 1; min-width: 0; }
+.edit-toggle { flex: none; }
+.edit-hint { margin: 0 0 4px; font-size: 0.9rem; }
+
+.row-handle, .pin {
+  flex: none;
+  width: var(--tap);
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.25rem;
+}
+/* Without this a touch on the handle scrolls the page instead of dragging. */
+.row-handle { touch-action: none; cursor: grab; }
+.pin { font-size: 1.4rem; }
+.pin[aria-pressed="true"] { color: var(--accent); }
+.row.editing { -webkit-user-select: none; user-select: none; }
+.row.dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+}
+.row.dragging .row-handle { cursor: grabbing; }
+.row-edit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.catalog input[type="search"] { margin: 4px 0 8px; }
+
+/* --- a form in a dialog --- */
+
+.field { display: grid; gap: 4px; margin-top: 12px; }
+.field > span:first-child { font-size: 0.9rem; font-weight: 600; }
+.field input { width: 100%; background: var(--bg); }
+.field-hint { color: var(--muted); font-size: 0.85rem; }
+.edit-form fieldset { min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.edit-form legend { padding: 0; color: var(--muted); font-size: 0.9rem; }
+.edit-form fieldset .field { margin-top: 4px; }
+.amount-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-error { margin: 12px 0 0; color: var(--danger); }
+.edit-form .ask-choices { grid-template-columns: 1fr 1fr; }
+.edit-form .ask-choices button { justify-content: center; }
 
 /* --- add-to-list panel on a recipe --- */
 

@@ -185,11 +185,52 @@ export function groupItems(items) {
     .sort((a, b) => Number(a.checked) - Number(b.checked) || a.sort - b.sort);
 }
 
+/**
+ * The sort values that put a moved row where it was dropped. `rows` are
+ * already in their new order, with the moved one at `index`.
+ *
+ * Every line behind the moved row takes the same value, because a row sits
+ * where its lowest line does. Usually that is the only change: the value
+ * halfway to its neighbours, or a step past the end. When the neighbours
+ * leave no whole number between them, every row is renumbered instead.
+ * Lines already at their value are left out, so nothing is written for them.
+ *
+ * @param {readonly Row[]} rows
+ * @param {number} index
+ * @returns {Map<string, number>}  item id -> new sort
+ */
+export function sortsForMove(rows, index) {
+  const moved = rows[index];
+  const before = rows[index - 1]?.sort;
+  const after = rows[index + 1]?.sort;
+  if (!moved || (before === undefined && after === undefined)) return new Map();
+
+  /** @type {number|undefined} undefined when there is no room, and every row is renumbered */
+  let sort;
+  if (before === undefined) sort = /** @type {number} */ (after) - SORT_STEP;
+  else if (after === undefined) sort = before + SORT_STEP;
+  else if (after - before >= 2) sort = Math.floor((before + after) / 2);
+
+  /** @type {Map<string, number>} */
+  const sorts = new Map();
+  rows.forEach((row, i) => {
+    if (sort !== undefined && row !== moved) return;
+    for (const line of row.lines) {
+      const value = sort ?? (i + 1) * SORT_STEP;
+      if (line.sort !== value) sorts.set(line.id, value);
+    }
+  });
+  return sorts;
+}
+
 // --- catalog ---------------------------------------------------------------
 
 /**
  * Record a use of a catalog item, creating it when new. This is how the
  * catalog fills itself: whatever you actually add drifts to the top.
+ *
+ * A deleted entry starts over, unpinned and at one use. Deleting one is how
+ * it is forgotten, so it should not come back as it was.
  *
  * @param {import('./types.js').Catalog|undefined|null} catalog
  * @param {{ key: string, label: string, defaultUnit?: string|null }} entry
@@ -199,7 +240,7 @@ export function groupItems(items) {
 export function touchCatalog(catalog, entry, now) {
   const items = [...(catalog?.items ?? [])];
   const i = items.findIndex((c) => c.key === entry.key);
-  const existing = i >= 0 ? items[i] : undefined;
+  const existing = i >= 0 && !items[i]?.deleted ? items[i] : undefined;
 
   const next = existing
     ? { ...existing, useCount: existing.useCount + 1, lastUsedAt: now, deleted: false, updatedAt: now }
@@ -234,6 +275,39 @@ export function rankCatalog(catalog) {
         b.useCount - a.useCount ||
         a.label.localeCompare(b.label),
     );
+}
+
+/**
+ * The catalog entry a typed name means, if any. A rename changes an entry's
+ * label and keeps its key, so it answers to both: "Kitchen roll", renamed
+ * from "Paper towels", is found by either name, and the lines already on a
+ * list still match it. Labels are checked first. Deleted entries never match.
+ *
+ * @param {import('./types.js').Catalog|undefined|null} catalog
+ * @param {string} name
+ * @param {string} [exceptKey]  leave this entry out, to check a rename for a clash
+ * @returns {CatalogItem|undefined}
+ */
+export function findCatalogEntry(catalog, name, exceptKey) {
+  const slug = slugify(name);
+  if (!slug) return undefined;
+  const live = (catalog?.items ?? []).filter((c) => !c.deleted && c.key !== exceptKey);
+  return live.find((c) => slugify(c.label) === slug) ?? live.find((c) => c.key === slug);
+}
+
+/**
+ * Change one catalog entry: rename, default unit, pin, delete. The entry is
+ * stamped, so the change wins the per-entry merge. Its key never changes.
+ *
+ * @param {import('./types.js').Catalog|undefined|null} catalog
+ * @param {string} key
+ * @param {Partial<Pick<CatalogItem, 'label'|'defaultUnit'|'pinned'|'deleted'>>} changes
+ * @param {string} now
+ * @returns {import('./types.js').Catalog}
+ */
+export function editCatalogEntry(catalog, key, changes, now) {
+  const items = (catalog?.items ?? []).map((c) => (c.key === key ? { ...c, ...changes, updatedAt: now } : c));
+  return { schemaVersion: 1, updatedAt: now, items };
 }
 
 // --- import validation -----------------------------------------------------

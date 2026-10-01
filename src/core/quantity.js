@@ -57,6 +57,36 @@ export function formatQty(qty) {
   return whole === 0 ? best.glyph : `${whole}${best.glyph}`;
 }
 
+/** Glyph -> value, for reading back an amount formatQty wrote. */
+const GLYPHS = new Map(FRACTIONS.filter((f) => f.glyph).map((f) => [f.glyph, f.value]));
+
+/**
+ * An amount as a person types it, as the decimal that is stored: "2", "1.5",
+ * "1,5", "3/4", "1 1/2", "1½". Blank is null, meaning no amount. Anything
+ * else, zero included, is undefined, so the caller can say so rather than
+ * guess.
+ *
+ * @param {string} text
+ * @returns {number|null|undefined}
+ */
+export function parseQty(text) {
+  // A decimal comma, but not a thousands one: "1,5" is 1.5, "1,000" is refused.
+  const s = text.trim().replace(/^(\d*),(\d{1,2})$/, '$1.$2');
+  if (s === '') return null;
+
+  let qty;
+  const glyph = s.match(/^(\d*)\s*(\S)$/);
+  const fraction = s.match(/^(?:(\d+)\s+)?(\d+)\s*\/\s*(\d+)$/);
+  if (glyph?.[2] && GLYPHS.has(glyph[2])) {
+    qty = Number(glyph[1] || 0) + (GLYPHS.get(glyph[2]) ?? 0);
+  } else if (fraction) {
+    qty = Number(fraction[1] ?? 0) + Number(fraction[2]) / Number(fraction[3]);
+  } else if (/^(\d+\.?\d*|\.\d+)$/.test(s)) {
+    qty = Number(s);
+  }
+  return qty !== undefined && Number.isFinite(qty) && qty > 0 ? qty : undefined;
+}
+
 /** Units that take a plural. Abbreviations (tsp, oz, lb, g) never do. */
 const PLURALS = {
   cup: 'cups',
@@ -80,6 +110,38 @@ const PLURALS = {
   box: 'boxes',
   bottle: 'bottles',
 };
+
+/** Suggested wherever a unit is typed. Anything else can still be typed. */
+export const COMMON_UNITS = [
+  'tsp', 'tbsp', 'cup', 'oz', 'lb', 'g', 'kg', 'ml', 'l',
+  'can', 'jar', 'bag', 'box', 'bottle', 'package', 'bunch', 'head', 'clove',
+  'loaf', 'stick', 'slice', 'piece', 'dozen', 'pint', 'quart', 'gallon',
+];
+
+/** Spelled out or plural, to the form the app stores. */
+const UNIT_ALIASES = new Map([
+  ...Object.entries(PLURALS).map(([one, many]) => /** @type {[string, string]} */ ([many, one])),
+  ['teaspoon', 'tsp'], ['teaspoons', 'tsp'], ['tsps', 'tsp'],
+  ['tablespoon', 'tbsp'], ['tablespoons', 'tbsp'], ['tbsps', 'tbsp'], ['tbs', 'tbsp'],
+  ['ounce', 'oz'], ['ounces', 'oz'],
+  ['pound', 'lb'], ['pounds', 'lb'], ['lbs', 'lb'],
+  ['gram', 'g'], ['grams', 'g'],
+]);
+
+/**
+ * A unit as typed, in the form stored: lowercase, singular, abbreviated
+ * where the app abbreviates. "Cups" -> "cup", "lbs." -> "lb". That matters
+ * beyond looks: only stored forms combine on a list, 1 lb with 8 oz. Blank is
+ * null, for a bare count.
+ *
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function normalizeUnit(text) {
+  const unit = text.trim().toLowerCase().replace(/\.$/, '');
+  if (!unit) return null;
+  return UNIT_ALIASES.get(unit) ?? unit;
+}
 
 /**
  * @param {string|null} unit

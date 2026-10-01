@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 136 Node tests
+npm test         # 149 Node tests
 npm run typecheck
 ```
 
@@ -196,7 +196,8 @@ of salt.
   Pages, and `sw.js` makes it open with no signal. Sign-in and the Sync screen
   work against real Drive, and the phone and the desktop sync through it.
   localhost syncs with `RecipeApp-dev`, and only Pages with the real
-  `RecipeApp`. What's left in the [roadmap](docs/roadmap.md) (chunks 5 and
-  6) is polish.
+  `RecipeApp`. Lists can be edited and reordered, and the catalog has its
+  own screen. What's left in the [roadmap](docs/roadmap.md) (chunk 6) is
+  polish.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

@@ -13,17 +13,18 @@ Done: the working copy (`db.js`), merge and sync (`merge.js`, `sync.js`, proven
 against an in-memory adapter), recipes with scaling and ratings, shopping lists
 with combining and the catalog, JSON import, a service worker (`sw.js`)
 that opens the app with no signal, `DriveAdapter` (`src/adapters/drive.js`),
-passing the adapter contract against real Google Drive, and Google sign-in
-(`src/ui/auth.js`) with a Sync screen (`src/ui/views/sync.js`).
+passing the adapter contract against real Google Drive, Google sign-in
+(`src/ui/auth.js`) with a Sync screen (`src/ui/views/sync.js`), and editing
+lists and the catalog (`src/ui/views/catalog.js`).
 
-188 tests: 136 run under `npm test`, and 52 need a browser (IndexedDB), so they
+201 tests: 149 run under `npm test`, and 52 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
 so run it by hand whenever `drive.js` changes.
 
 v1 works end to end: recipes and lists sync between the desktop and the phone
-through Drive. Chunks 5 and 6 are polish.
+through Drive. Chunk 6 is polish.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
@@ -34,8 +35,8 @@ through Drive. Chunks 5 and 6 are polish.
 | 5 | List and catalog editing | M | Amounts, order, and managing staples |
 | 6 | Backup, pruning, archiving | S | An exit door and a tidy store |
 
-Chunks 5 and 6 are independent of each other and of everything above. Do them
-in any order, or skip them; the app is usable without them.
+Chunk 6 is independent of everything above. Do it, or skip it; the app is
+usable without it.
 
 ---
 
@@ -69,6 +70,10 @@ accident in a fresh session, and each one exists for a reason.
 - **Never `await` between two requests in one IndexedDB transaction**; the
   transaction can go inactive. Chain through `onsuccess` instead, as
   `db.saveLocal` and `db.markSynced` do.
+- **In a view, read and change the record in memory before a handler's first
+  `await`.** Two handlers can overlap, from two quick taps, and one that read
+  the list before the other saved it saves over it. The list view's `add`
+  did this until chunk 5, and lost an item.
 - **A new file the app loads goes in `SHELL` in `sw.js`**, or the app opens
   online but not in a shop. `test/shell.test.js` fails until it is listed.
   Keep every import static, so a file the app needs is fetched at startup.
@@ -122,7 +127,16 @@ accident in a fresh session, and each one exists for a reason.
   keep both (`keepBoth`).
 - List items are stored **one line per source** and combined only for display
   (`groupItems`). `sort` is sparse integers, so moving one item writes one
-  number.
+  number. A row sits where its lowest line does, so a moved row gives every
+  line behind it the same value (`sortsForMove`).
+- **An edit writes only what changed.** An untouched amount keeps its exact
+  value rather than the rounded one its field shows, and only the lines that
+  changed get a new `updatedAt`, so they win a merge and nothing else does.
+- **A catalog rename keeps the key.** Only the label changes, so the lines
+  already on lists still match it, and `findCatalogEntry` finds it by its new
+  name or its old one. A name another entry answers to is refused. A list
+  item renamed in the app does take the new name's key, so a fixed typo
+  combines with the real thing.
 - **Every destructive action confirms first**, and says what will happen.
 
 **Tests**
@@ -405,7 +419,42 @@ screen."
 
 ## 5. List and catalog editing
 
-**Status:** not started.
+**Status:** done 2026-10-01. Clicked through in the browser pane at 375px,
+light and dark, on the samples. Verified: fixing an amount from a recipe
+(20 oz to 1 1/2 lbs: stored as 1.5 lb, and the row combines with the other
+recipe's 1 lb to 2½ lb), refusing "lots", renaming an item, dragging rows to
+the top and between two others, arrow keys on a handle, a common item renamed
+("Bread" to "Sourdough") and still found by typing "bread", a clashing rename
+refused, pin, delete and re-add, no sideways scroll, 44px targets. Not
+verified: dragging with a finger on the phone (the pane sends mouse events),
+the page scrolling during a long drag, and the service worker, which the
+browser pane will not register. `test/shell.test.js` confirms the new screen
+is in the shell.
+
+Decisions made in that chat:
+- **Edit is a mode on the list.** It swaps each checkbox for a drag handle
+  (☰) and makes a tap open the item. Handles never show while shopping, so a
+  thumb scrolling the list in a shop cannot drag anything. The cart rows can
+  be edited too.
+- **A row from two recipes is edited line by line**, one amount per recipe,
+  so taking one recipe off the list still removes exactly its share.
+- **Dragging moves the other rows, never the dragged one.** Moving the dragged
+  element releases its pointer capture, and the drop never arrives. The first
+  version stuck that way. Arrow keys on a handle move a row one place.
+- **Amounts are typed as people write them**: `parseQty` takes 2, 1.5, 1,5,
+  3/4, 1 1/2 and 1½. Units are stored singular and short (`normalizeUnit`:
+  "lbs." to lb, "Cups" to cup), because only stored forms combine.
+- **The Common items screen** (`#/catalog`, linked from Lists and from edit
+  mode) lists entries in quick-add order, with a Find box once there are ten.
+  Rename and the default unit are in a form; pin and delete are on the row.
+  It has no add box: the catalog fills itself from lists.
+- **A deleted catalog entry starts over** when it is added to a list again:
+  unpinned, one use. Before, it came back as it was.
+- **Aisle grouping stays deferred.** Dragging rows into store order covers it
+  for now.
+- **Fixed a lost update in `add`** (see the working agreements): two adds
+  close together kept only the second. Seen when typing on straight after
+  Enter, which also ran the next item's text into the first.
 
 **Why:** the gaps noticed while using the list screens.
 
@@ -514,4 +563,5 @@ first thing to build once the build is stable.
   three fields rather than one parsed string.
 
 Also deferred, recorded so they are not forgotten: recipe photos and `images/`,
-and grouping shopping lists by store aisle (unless it is picked up in chunk 5).
+and grouping shopping lists by store aisle (chunk 5 left it, since rows can be
+dragged into store order).

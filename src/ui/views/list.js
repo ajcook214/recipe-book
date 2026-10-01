@@ -1,13 +1,26 @@
 // @ts-check
 import { getRecord, saveLocal } from '../../core/db.js';
-import { groupItems, newItem, nextSort, rankCatalog, touchCatalog } from '../../core/list.js';
+import {
+  findCatalogEntry,
+  groupItems,
+  newItem,
+  nextSort,
+  rankCatalog,
+  sortsForMove,
+  touchCatalog,
+} from '../../core/list.js';
+import { COMMON_UNITS, formatQty, normalizeUnit, parseQty } from '../../core/quantity.js';
 import { slugify } from '../../core/recipe.js';
-import { h, nowIso } from '../dom.js';
+import { dragRow, editDialog, field, h, nowIso } from '../dom.js';
 
 /**
  * One shopping list, built for use in the aisle: big tap targets, rows to get
  * on top, the cart below. Rows combine same-key lines; checking a row checks
  * every line behind it.
+ *
+ * Edit turns the rows into something to rearrange instead: a handle to drag
+ * each one by, and a tap opens its name and amounts. It is a separate mode so
+ * that a thumb scrolling down the list in a shop never drags anything.
  *
  * @typedef {import('../../core/types.js').ShoppingList} ShoppingList
  * @typedef {import('../../core/types.js').ListItem} ListItem
@@ -65,13 +78,101 @@ export async function render(ctx, [id]) {
     await updateLines(idsOf(row), (item) => ({ ...item, deleted: true }));
   }
 
-  /** Add from the catalog or free-form text; either way the catalog learns it. */
-  /** @param {string} text */
+  /**
+   * Move a row within its section, the open rows or the cart, and save the
+   * sort values that keep it there.
+   *
+   * @param {Row[]} section  in the order on screen before the move
+   * @param {number} from
+   * @param {number} to
+   */
+  async function moveRow(section, from, to) {
+    const order = [...section];
+    const [row] = order.splice(from, 1);
+    if (!row || from === to || to < 0 || to > order.length) return draw();
+    order.splice(to, 0, row);
+    const sorts = sortsForMove(order, to);
+    if (!sorts.size) return draw();
+    await updateLines(new Set(sorts.keys()), (item) => ({ ...item, sort: sorts.get(item.id) ?? item.sort }));
+  }
+
+  /**
+   * Change a row's name, and the amount of each line behind it. A row from
+   * two recipes keeps two lines, so each recipe can still be taken off the
+   * list exactly. Only what was changed is written: an untouched amount keeps
+   * its exact value, rather than the rounded one the field shows.
+   *
+   * @param {Row} row
+   */
+  async function editRow(row) {
+    const name = /** @type {HTMLInputElement} */ (h('input', { value: row.text, autocomplete: 'off', enterkeyhint: 'done' }));
+    const lines = row.lines.map((line, i) => {
+      const shown = line.qty === null ? '' : formatQty(line.qty);
+      const qty = /** @type {HTMLInputElement} */ (
+        h('input', { value: shown, inputmode: 'decimal', autocomplete: 'off', enterkeyhint: 'done', autofocus: i === 0 })
+      );
+      const unit = /** @type {HTMLInputElement} */ (
+        h('input', { value: line.unit ?? '', list: 'unit-options', autocomplete: 'off', autocapitalize: 'none', enterkeyhint: 'done' })
+      );
+      return { line, shown, qty, unit };
+    });
+
+    await editDialog({
+      title: 'Change item',
+      fields: [
+        field('Name', name),
+        lines.map(({ line, qty, unit }) =>
+          h(
+            'fieldset',
+            null,
+            row.lines.length > 1 ? h('legend', null, line.from ? line.from.recipeTitle : 'Added by hand') : null,
+            h('div', { class: 'amount-fields' }, field('Amount', qty), field('Unit', unit)),
+          ),
+        ),
+        h('datalist', { id: 'unit-options' }, COMMON_UNITS.map((u) => h('option', { value: u }))),
+      ],
+      save: async () => {
+        const text = name.value.trim();
+        if (!text) return 'Give it a name.';
+        const renamed = text !== row.text;
+
+        /** @type {Map<string, Partial<ListItem>>} */
+        const changes = new Map();
+        for (const { line, shown, qty, unit } of lines) {
+          /** @type {Partial<ListItem>} */
+          const change = {};
+          if (qty.value.trim() !== shown) {
+            const value = parseQty(qty.value);
+            if (value === undefined) return `"${qty.value.trim()}" is not an amount. Try 2, 1.5 or 1 1/2, or leave it blank.`;
+            if (value !== line.qty) change.qty = value;
+          }
+          if (unit.value.trim() !== (line.unit ?? '')) {
+            const value = normalizeUnit(unit.value);
+            if (value !== line.unit) change.unit = value;
+          }
+          // The key follows the name, so a fixed typo combines with the real thing.
+          if (renamed) Object.assign(change, { text, key: slugify(text) || null });
+          if (Object.keys(change).length) changes.set(line.id, change);
+        }
+        if (changes.size) await updateLines(new Set(changes.keys()), (item) => ({ ...item, ...changes.get(item.id) }));
+      },
+    });
+  }
+
+  /**
+   * Add from the catalog or free-form text; either way the catalog learns it.
+   *
+   * Everything is read and changed in memory before the first await. Two
+   * adds can overlap, from two quick taps on the buttons, and one that read
+   * the list before the other had saved it would save over it.
+   *
+   * @param {string} text
+   */
   async function add(text) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const key = slugify(trimmed);
-    const entry = catalog?.items.find((c) => c.key === key && !c.deleted);
+    const entry = findCatalogEntry(catalog, trimmed);
+    const key = entry?.key ?? slugify(trimmed);
     const label = entry?.label ?? trimmed;
     const current = /** @type {ShoppingList} */ (list);
 
@@ -82,11 +183,10 @@ export async function render(ctx, [id]) {
       sort: nextSort(current.items),
     });
 
-    if (key) {
-      catalog = touchCatalog(catalog, { key, label, defaultUnit: entry?.defaultUnit ?? null }, nowIso());
-      await saveLocal(ctx.db, 'catalog', catalog);
-    }
-    await save([...current.items, item]);
+    if (key) catalog = touchCatalog(catalog, { key, label, defaultUnit: entry?.defaultUnit ?? null }, nowIso());
+    const saving = save([...current.items, item]);
+    if (key) await saveLocal(ctx.db, 'catalog', catalog);
+    await saving;
   }
 
   // --- static parts --------------------------------------------------------
@@ -120,14 +220,36 @@ export async function render(ctx, [id]) {
       class: 'add-form',
       onsubmit: async (/** @type {Event} */ e) => {
         e.preventDefault();
-        await add(input.value);
+        // Cleared now, not after saving, so typing on is not run into this one.
+        const text = input.value;
         input.value = '';
         input.focus();
+        await add(text);
       },
     },
     input,
     h('button', { type: 'submit' }, 'Add'),
     suggestions,
+  );
+
+  let editing = false;
+  const editToggle = h(
+    'button',
+    {
+      type: 'button',
+      class: 'edit-toggle',
+      onclick: () => {
+        editing = !editing;
+        draw();
+      },
+    },
+    'Edit',
+  );
+  const editHint = h(
+    'p',
+    { class: 'muted edit-hint', hidden: true },
+    'Drag ☰ to move an item, or tap it to change its name or amount. ',
+    h('a', { href: '#/catalog' }, 'Common items'),
   );
 
   const quick = h('div', { class: 'chips quick-add' });
@@ -139,30 +261,64 @@ export async function render(ctx, [id]) {
   // --- drawing -------------------------------------------------------------
 
   /** @param {Row} row */
-  function rowView(row) {
+  function rowText(row) {
+    return h(
+      'span',
+      { class: 'row-text' },
+      h('span', { class: 'row-name' }, row.text),
+      row.amount ? h('span', { class: 'row-amount' }, row.amount) : null,
+      row.sources.length ? h('span', { class: 'row-sources' }, row.sources.join(', ')) : null,
+    );
+  }
+
+  /**
+   * @param {Row} row
+   * @param {number} index
+   * @param {Row[]} section  the rows drawn alongside it, open or in the cart
+   */
+  function rowView(row, index, section) {
+    const remove = h(
+      'button',
+      { type: 'button', class: 'row-remove', 'aria-label': `Remove ${row.text}`, onclick: () => removeRow(row) },
+      '×',
+    );
+
+    if (editing) {
+      const handle = h(
+        'button',
+        {
+          type: 'button',
+          class: 'row-handle',
+          'data-key': row.key,
+          'aria-label': `Move ${row.text}`,
+          title: 'Drag, or use the arrow keys, to move',
+          onpointerdown: (/** @type {PointerEvent} */ e) => dragRow(e, (from, to) => moveRow(section, from, to)),
+          onkeydown: async (/** @type {KeyboardEvent} */ e) => {
+            const step = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+            if (!step) return;
+            e.preventDefault();
+            await moveRow(section, index, index + step);
+            /** @type {HTMLElement|null} */ (view.querySelector(`.row-handle[data-key="${CSS.escape(row.key)}"]`))?.focus();
+          },
+        },
+        '☰',
+      );
+      return h(
+        'li',
+        { class: row.checked ? 'row done editing' : 'row editing' },
+        handle,
+        h('button', { type: 'button', class: 'row-edit', onclick: () => editRow(row) }, rowText(row)),
+        remove,
+      );
+    }
+
     const box = h('input', {
       type: 'checkbox',
       checked: row.checked,
       onchange: () => toggle(row),
       'aria-label': `${row.checked ? 'Uncheck' : 'Check'} ${row.text}`,
     });
-    return h(
-      'li',
-      { class: row.checked ? 'row done' : 'row' },
-      h(
-        'label',
-        null,
-        box,
-        h(
-          'span',
-          { class: 'row-text' },
-          h('span', { class: 'row-name' }, row.text),
-          row.amount ? h('span', { class: 'row-amount' }, row.amount) : null,
-          row.sources.length ? h('span', { class: 'row-sources' }, row.sources.join(', ')) : null,
-        ),
-      ),
-      h('button', { type: 'button', class: 'row-remove', 'aria-label': `Remove ${row.text}`, onclick: () => removeRow(row) }, '×'),
-    );
+    return h('li', { class: row.checked ? 'row done' : 'row' }, h('label', null, box, rowText(row)), remove);
   }
 
   function draw() {
@@ -170,6 +326,9 @@ export async function render(ctx, [id]) {
     const rows = groupItems(current.items);
     const open = rows.filter((r) => !r.checked);
     const done = rows.filter((r) => r.checked);
+
+    editToggle.textContent = editing ? 'Done' : 'Edit';
+    editHint.hidden = !editing;
     // Anything already on the list, in the cart or not, is not worth offering.
     const onList = new Set(rows.map((r) => r.key));
 
@@ -184,12 +343,17 @@ export async function render(ctx, [id]) {
     suggestions.replaceChildren(...ranked.map((c) => h('option', { value: c.label })));
 
     toGet.replaceChildren(
-      ...(open.length ? open.map(rowView) : [h('li', { class: 'muted empty-row' }, rows.length ? 'Everything is in the cart.' : 'Nothing on this list yet.')]),
+      ...(open.length
+        ? open.map((row, i) => rowView(row, i, open))
+        : [h('li', { class: 'muted empty-row' }, rows.length ? 'Everything is in the cart.' : 'Nothing on this list yet.')]),
     );
 
     cart.replaceChildren(
       ...(done.length
-        ? [h('h2', null, `In the cart (${done.length})`), h('ul', { class: 'shop-list' }, done.map(rowView))]
+        ? [
+            h('h2', null, `In the cart (${done.length})`),
+            h('ul', { class: 'shop-list' }, done.map((row, i) => rowView(row, i, done))),
+          ]
         : []),
     );
 
@@ -268,18 +432,19 @@ export async function render(ctx, [id]) {
     );
   }
 
-  draw();
-
-  return h(
+  const view = h(
     'section',
     { class: 'shopping' },
     h('a', { class: 'back', href: '#/lists' }, '← Lists'),
-    name,
+    h('div', { class: 'page-head' }, name, editToggle),
     addForm,
     quick,
+    editHint,
     toGet,
     cart,
     recipes,
     footer,
   );
+  draw();
+  return view;
 }

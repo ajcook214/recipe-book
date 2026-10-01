@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  editCatalogEntry,
+  findCatalogEntry,
   groupItems,
   itemsFromRecipe,
   listIdFor,
@@ -12,6 +14,7 @@ import {
   normalizeList,
   rankCatalog,
   SORT_STEP,
+  sortsForMove,
   touchCatalog,
 } from '../src/core/list.js';
 import { combineAmount } from '../src/core/units.js';
@@ -132,16 +135,91 @@ test('touching the catalog creates an entry, then bumps it', () => {
   assert.equal(twice.items[0]?.lastUsedAt, 'T2');
 });
 
+/** @param {string} key @param {number} useCount @param {boolean} [pinned] @param {string} [label] */
+const entry = (key, useCount, pinned = false, label = key) => ({
+  key, label, defaultUnit: null, useCount, lastUsedAt: null, pinned, deleted: false, updatedAt: 'T',
+});
+/** @param {any[]} items */
+const catalogOf = (items) => ({ schemaVersion: 1, updatedAt: 'T', items });
+
 test('the catalog ranks pinned first, then by use', () => {
-  const entry = (key, useCount, pinned = false) => ({
-    key, label: key, defaultUnit: null, useCount, lastUsedAt: null, pinned, deleted: false, updatedAt: 'T',
-  });
-  const ranked = rankCatalog({
-    schemaVersion: 1,
-    updatedAt: 'T',
-    items: [entry('a', 9), entry('b', 1, true), entry('c', 20), { ...entry('d', 99), deleted: true }],
-  });
+  const ranked = rankCatalog(catalogOf([entry('a', 9), entry('b', 1, true), entry('c', 20), { ...entry('d', 99), deleted: true }]));
   assert.deepEqual(ranked.map((c) => c.key), ['b', 'c', 'a']);
+});
+
+test('a deleted catalog entry added again starts over', () => {
+  const gone = { ...entry('milk', 14, true, 'Milk'), defaultUnit: 'gallon', deleted: true };
+  const back = touchCatalog(catalogOf([gone]), { key: 'milk', label: 'milk' }, 'T2');
+  assert.equal(back.items.length, 1, 'the same entry, not a second one');
+  assert.deepEqual(back.items[0], {
+    key: 'milk', label: 'milk', defaultUnit: null, useCount: 1, lastUsedAt: 'T2', pinned: false, deleted: false, updatedAt: 'T2',
+  });
+});
+
+test('a renamed catalog entry answers to its new name and its old key', () => {
+  const towels = entry('paper-towels', 3, false, 'Kitchen roll');
+  const catalog = catalogOf([towels, entry('milk', 9, false, 'Milk'), { ...entry('eggs', 2, false, 'Eggs'), deleted: true }]);
+  assert.equal(findCatalogEntry(catalog, 'kitchen roll'), towels);
+  assert.equal(findCatalogEntry(catalog, 'Paper Towels'), towels);
+  assert.equal(findCatalogEntry(catalog, 'MILK!')?.key, 'milk');
+  assert.equal(findCatalogEntry(catalog, 'eggs'), undefined, 'deleted entries never match');
+  assert.equal(findCatalogEntry(catalog, '!!!'), undefined);
+});
+
+test('a rename is checked against every entry but its own', () => {
+  const catalog = catalogOf([entry('mlik', 1, false, 'Mlik'), entry('milk', 9, false, 'Milk')]);
+  assert.equal(findCatalogEntry(catalog, 'Milk', 'mlik')?.key, 'milk', 'the typo cannot take a name in use');
+  assert.equal(findCatalogEntry(catalog, 'MILK', 'milk'), undefined, 'an entry can change its own case');
+});
+
+test('editing a catalog entry stamps it and keeps its key', () => {
+  const catalog = catalogOf([entry('paper-towels', 3, false, 'Paper towels'), entry('milk', 9)]);
+  const next = editCatalogEntry(catalog, 'paper-towels', { label: 'Kitchen roll', pinned: true }, 'T2');
+  assert.deepEqual(next.items[0], { ...entry('paper-towels', 3, true, 'Kitchen roll'), updatedAt: 'T2' });
+  assert.equal(next.items[1], catalog.items[1], 'the others are untouched, so they lose no merge');
+  assert.equal(next.updatedAt, 'T2');
+});
+
+// --- moving rows -----------------------------------------------------------
+
+/**
+ * Rows in a given order, each with one line per sort value.
+ * @param {...(number|number[])} sorts
+ */
+function rowsAt(...sorts) {
+  return sorts.map((s, i) => {
+    const lines = [s].flat().map((sort, j) => ({ ...newItem(`r${i}`, { ...opts, sort }), id: `r${i}.${j}` }));
+    return groupItems(lines)[0] ?? assert.fail('fixture');
+  });
+}
+
+test('a moved row takes the value halfway to its neighbours, and nothing else changes', () => {
+  // [100, 400, 200, 300]: 400 was dragged up to second place.
+  assert.deepEqual([...sortsForMove(rowsAt(100, 400, 200, 300), 1)], [['r1.0', 150]]);
+});
+
+test('a row moved to either end steps past it', () => {
+  assert.deepEqual([...sortsForMove(rowsAt(300, 100, 200), 0)], [['r0.0', 0]]);
+  assert.deepEqual([...sortsForMove(rowsAt(200, 300, 100), 2)], [['r2.0', 400]]);
+});
+
+test('every line behind a moved row moves with it', () => {
+  // Beef from two recipes, at 500 and 900, dragged to the top.
+  const sorts = sortsForMove(rowsAt([500, 900], 100, 200), 0);
+  assert.deepEqual([...sorts], [['r0.0', 0], ['r0.1', 0]]);
+});
+
+test('with no whole number left between neighbours, the rows are renumbered in order', () => {
+  // 400 dropped between 150 and 151.
+  const rows = rowsAt(100, 150, 400, 151);
+  const sorts = sortsForMove(rows, 2);
+  assert.deepEqual([...sorts], [['r1.0', 200], ['r2.0', 300], ['r3.0', 400]], 'the first row was already at 100');
+  const after = groupItems(rows.flatMap((r) => r.lines.map((l) => ({ ...l, sort: sorts.get(l.id) ?? l.sort }))));
+  assert.deepEqual(after.map((r) => r.text), ['r0', 'r1', 'r2', 'r3']);
+});
+
+test('moving the only row changes nothing', () => {
+  assert.equal(sortsForMove(rowsAt(100), 0).size, 0);
 });
 
 // --- list import -----------------------------------------------------------

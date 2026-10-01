@@ -6,6 +6,7 @@ import * as recipeView from './ui/views/recipe.js';
 import * as importView from './ui/views/import.js';
 import * as listsView from './ui/views/lists.js';
 import * as listView from './ui/views/list.js';
+import * as catalogView from './ui/views/catalog.js';
 import * as syncView from './ui/views/sync.js';
 
 /**
@@ -19,6 +20,7 @@ const ROUTES = [
   [/^#\/recipe\/([^/]+)$/, recipeView.render, 'recipes'],
   [/^#\/lists$/, listsView.render, 'lists'],
   [/^#\/list\/([^/]+)$/, listView.render, 'lists'],
+  [/^#\/catalog$/, catalogView.render, 'lists'],
   [/^#\/import$/, importView.render, 'import'],
   [/^#\/sync$/, syncView.render, 'sync'],
 ];

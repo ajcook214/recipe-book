@@ -52,6 +52,7 @@ const SHELL = [
   'src/core/units.js',
   'src/ui/auth.js',
   'src/ui/dom.js',
+  'src/ui/views/catalog.js',
   'src/ui/views/import.js',
   'src/ui/views/list.js',
   'src/ui/views/lists.js',
