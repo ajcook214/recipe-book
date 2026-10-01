@@ -478,6 +478,14 @@ Recorded so no session has to rediscover them:
   each import a different recipe with the same new name, before either
   syncs, share one file, and last-writer-wins keeps the newer. It takes two
   devices importing by hand at once.
+- **The address without its final slash does not open offline.** The service
+  worker covers only its own folder, `…/recipe-book/`, and GitHub Pages cannot
+  send the header that would widen that. So `…/recipe-book`, or
+  `…/recipe-book#/lists`, reaches the network, and with no signal it fails,
+  unless the phone still remembers GitHub's redirect to the slashed address.
+  Every screen inside the app is a `#/…` route on the one page, and all of them
+  work offline. Use the home-screen icon, which always opens `start_url`
+  (`./`), or a bookmark that ends in `/`.
 - **Sign-in from an iPhone home-screen app is untested.** Google's popup may
   not work there. The owner does not use an iPhone, so this is very low
   priority.
