@@ -1,5 +1,5 @@
 // @ts-check
-import { getRecord, listRecords, saveLocal } from '../../core/db.js';
+import { getRecord, listEnvelopes, listRecords, saveLocal } from '../../core/db.js';
 import { itemsFromRecipe, newList, nextSort } from '../../core/list.js';
 import { formatAmount } from '../../core/quantity.js';
 import { formatMinutes, h, nowIso, sourceParts } from '../dom.js';
@@ -129,7 +129,8 @@ export async function render(ctx, [id]) {
       const chosen = boxes.filter((b) => b.box.checked).map((b) => b.ing);
       if (!chosen.length) return;
       const existing = lists.find((l) => l.id === target.value);
-      const list = existing ?? newList(defaultListName());
+      const taken = new Set((await listEnvelopes(ctx.db, 'list')).map((e) => e.id));
+      const list = existing ?? newList(defaultListName(), taken);
       const items = itemsFromRecipe({ ...r, ingredients: chosen }, servings, { sort: nextSort(list.items) });
       await saveLocal(ctx.db, 'list', { ...list, items: [...list.items, ...items], updatedAt: nowIso() });
       addPanel.hidden = true;

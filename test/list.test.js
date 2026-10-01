@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import {
   groupItems,
   itemsFromRecipe,
+  listIdFor,
   newItem,
+  newList,
   nextSort,
   normalizeList,
   rankCatalog,
@@ -155,4 +157,28 @@ test('list import repairs items and rejects non-lists', () => {
   assert.equal(list.items[0]?.key, 'milk');
   assert.ok(list.items[1]?.checkedAt, 'a checked item gets a checkedAt');
   assert.equal(warnings.length, 1);
+});
+
+test('an imported list keeps its id, unless it cannot be a file name', () => {
+  assert.equal(normalizeList({ id: '2026-09-21-090000', items: [] }, opts).list.id, '2026-09-21-090000');
+  const { list, warnings } = normalizeList({ id: '../lists/x', items: [] }, opts);
+  assert.match(list.id, /^id\d+$/);
+  assert.match(warnings[0] ?? '', /file name/);
+});
+
+test('a new list is named by when it was made, to the second', () => {
+  const at = new Date(2026, 8, 30, 14, 32, 5);
+  assert.equal(listIdFor(at, new Set()), '2026-09-30-143205');
+  assert.equal(listIdFor(new Date(2026, 0, 2, 3, 4, 5), new Set()), '2026-01-02-030405', 'zero-padded, so names sort by time');
+
+  const list = newList('Shopping Sep 30', new Set(), { now: () => at.toISOString() });
+  assert.equal(list.id, '2026-09-30-143205');
+  assert.equal(list.updatedAt, at.toISOString());
+});
+
+test('two lists made in the same second never share a file', () => {
+  // A double tap on New list, or a deleted list from that second.
+  const at = new Date(2026, 8, 30, 14, 32, 5);
+  const taken = new Set(['2026-09-30-143205', '2026-09-30-143205-2']);
+  assert.equal(listIdFor(at, taken), '2026-09-30-143205-3');
 });

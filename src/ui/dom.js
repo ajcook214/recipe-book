@@ -40,6 +40,51 @@ export function h(tag, props, ...children) {
 }
 
 /**
+ * A modal question with more answers than confirm() allows. Resolves with the
+ * chosen value; Escape gives `dismiss`, which should be the safe answer. The
+ * safe answer's button also takes the focus, so a stray Enter cannot pick a
+ * destructive one.
+ *
+ * @template {string} T
+ * @param {object} spec
+ * @param {string} spec.title
+ * @param {any[]} spec.body                      paragraphs, as h() children
+ * @param {Array<{ value: T, label: string, danger?: boolean }>} spec.choices
+ * @param {T} spec.dismiss
+ * @returns {Promise<T>}
+ */
+export function ask({ title, body, choices, dismiss }) {
+  const dialog = /** @type {HTMLDialogElement} */ (
+    h(
+      'dialog',
+      { class: 'ask' },
+      h(
+        'form',
+        { method: 'dialog' },
+        h('h2', null, title),
+        body.map((part) => h('p', null, part)),
+        h(
+          'div',
+          { class: 'ask-choices' },
+          choices.map((c) =>
+            h('button', { value: c.value, class: c.danger ? 'danger' : null, autofocus: c.value === dismiss }, c.label),
+          ),
+        ),
+      ),
+    )
+  );
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => {
+      const chosen = choices.find((c) => c.value === dialog.returnValue);
+      dialog.remove();
+      resolve(chosen ? chosen.value : dismiss);
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+}
+
+/**
  * 45 -> "45 min", 75 -> "1 hr 15 min".
  *
  * @param {number|null} minutes

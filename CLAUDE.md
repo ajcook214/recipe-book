@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 124 Node tests
+npm test         # 136 Node tests
 npm run typecheck
 ```
 
@@ -67,14 +67,17 @@ interface StorageAdapter {
 ```
 RecipeApp/
   manifest.json          { schemaVersion, lastModified }
-  recipes/<uuid>.json    one file per recipe
-  lists/<uuid>.json      one file per shopping list
+  recipes/<id>.json      one file per recipe: recipes/tomato-soup.json
+  lists/<id>.json        one file per shopping list: lists/2026-09-30-143205.json
   catalog.json           the common-items catalog (single file)
   images/<uuid>.jpg
 ```
 
 - One file per record keeps writes small, reduces conflicts, and makes files easy to edit by hand.
-- Every record has `id` (UUID), `updatedAt`, and `deleted` (tombstone flag).
+- Every record has `id`, `updatedAt`, and `deleted` (tombstone flag). The id is
+  the file name, so it is readable: a recipe's is its title as a slug, fixed
+  once it exists, and titles are unique by slug; a list's is when it was made.
+  List item ids are UUIDs. Details in [docs/schema.md](docs/schema.md).
 - `schemaVersion` is a hook for future migrations.
 
 ## Sync algorithm
@@ -157,6 +160,12 @@ Import screen (file picker or paste).
   "about 1 cup" volume hints. Keep only what changes the outcome: times,
   temperatures, pan sizes, doneness cues, and genuinely useful notes.
 - `source` records the original URL.
+- **`id` is the title as a slug** (`"Tomato Soup"` → `"tomato-soup"`, at most
+  60 characters, cut at a word break), because it becomes the file name.
+  Re-ingesting a recipe from the same URL gives the same id, and importing it
+  updates the one in the app and keeps its rating. Another recipe with a
+  title already taken makes the Import screen ask: cancel, replace, or keep
+  both.
 - Ingested files go in `/local-data/` (gitignored). **This repo is public:
   never commit recipe data.**
 

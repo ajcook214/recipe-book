@@ -1,9 +1,11 @@
 // @ts-check
-import { getRecord, saveLocal } from '../../core/db.js';
+import { getRecord, listRecords, saveLocal } from '../../core/db.js';
 import { normalizeCatalog, normalizeList } from '../../core/list.js';
 import { mergeCatalog } from '../../core/merge.js';
-import { normalizeRecipe } from '../../core/recipe.js';
-import { h, nowIso } from '../dom.js';
+import { keepBoth, normalizeRecipe, placeRecipe } from '../../core/recipe.js';
+import { ask, h, nowIso, sourceParts } from '../dom.js';
+
+/** @typedef {import('../../core/types.js').Recipe} Recipe */
 
 /**
  * Import recipe JSON, from files or pasted text. This is how Claude-ingested
@@ -63,22 +65,39 @@ export async function render(ctx) {
 
       try {
         const { recipe, warnings } = normalizeRecipe(raw);
-        const existing = await getRecord(ctx.db, 'recipe', recipe.id);
+        const here = await listRecords(ctx.db, 'recipe');
+        const place = placeRecipe(recipe, here);
 
-        // Rating is the owner's judgement, not something ingestion knows.
-        // Re-importing a re-summarized recipe must not wipe it.
-        if (existing && !existing.deleted && recipe.rating === null) {
-          recipe.rating = existing.rating ?? null;
+        let incoming = recipe;
+        let verb = 'Imported';
+        if (place.kind === 'update') {
+          verb = 'Updated';
+          // Rating is the owner's judgement, not something ingestion knows.
+          // Re-importing a re-summarized recipe must not wipe it.
+          incoming = { ...recipe, rating: recipe.rating ?? place.existing.rating ?? null };
+        } else if (place.kind === 'clash') {
+          const both = keepBoth(recipe, here);
+          const choice = await askAboutClash(recipe, place.existing, both);
+          if (choice === 'cancel') {
+            report('skip', label, `Skipped "${recipe.title}"; the one already here is unchanged`);
+            continue;
+          }
+          if (choice === 'replace') {
+            verb = 'Replaced';
+            // Takes over the old one's id, so list lines that point at it,
+            // and its file, carry on.
+            incoming = { ...recipe, id: place.existing.id, rating: recipe.rating ?? place.existing.rating ?? null };
+          } else {
+            incoming = both;
+          }
         }
 
         // The import itself is the edit. Stamping it now means a re-import
         // wins over the older copy on the next sync, instead of losing a
         // last-writer-wins comparison against the file's original timestamp.
-        recipe.updatedAt = nowIso();
-        await saveLocal(ctx.db, 'recipe', recipe);
-
-        const verb = existing && !existing.deleted ? 'Updated' : 'Imported';
-        report('ok', label, `${verb} "${recipe.title}"`, warnings, recipe.id);
+        incoming = { ...incoming, updatedAt: nowIso() };
+        await saveLocal(ctx.db, 'recipe', incoming);
+        report('ok', label, `${verb} "${incoming.title}"`, warnings, incoming.id);
       } catch (err) {
         report('error', label, err instanceof Error ? err.message : String(err));
       }
@@ -86,7 +105,7 @@ export async function render(ctx) {
   }
 
   /**
-   * @param {'ok'|'error'} kind
+   * @param {'ok'|'error'|'skip'} kind
    * @param {string} label
    * @param {string} message
    * @param {string[]} [warnings]
@@ -99,7 +118,7 @@ export async function render(ctx) {
       h(
         'li',
         { class: kind },
-        h('span', { class: 'result-mark' }, kind === 'ok' ? '✓' : '✗'),
+        h('span', { class: 'result-mark' }, { ok: '✓', error: '✗', skip: '–' }[kind]),
         h(
           'div',
           null,
@@ -132,7 +151,11 @@ export async function render(ctx) {
     'section',
     { class: 'import' },
     h('h1', null, 'Import recipes'),
-    h('p', { class: 'muted' }, 'Recipe, shopping list or catalog JSON files. Re-importing something with the same id updates it; a catalog merges into the one you have.'),
+    h(
+      'p',
+      { class: 'muted' },
+      'Recipe, shopping list or catalog JSON files. A recipe imported again from the same source updates the one you have; another recipe with a name already here asks what to do. A catalog merges into the one you have.',
+    ),
     h('label', { class: 'button file-button' }, 'Choose files…', fileInput),
     h('h2', null, 'Or paste'),
     paste,
@@ -150,6 +173,36 @@ export async function render(ctx) {
     ),
     results,
   );
+}
+
+/**
+ * Asks what to do when an imported recipe has the id or the name of one
+ * already here.
+ *
+ * @param {Recipe} incoming
+ * @param {Recipe} existing
+ * @param {Recipe} both  the incoming recipe as "Keep both" would save it
+ * @returns {Promise<'both'|'replace'|'cancel'>}
+ */
+function askAboutClash(incoming, existing, both) {
+  const from = (/** @type {Recipe} */ r) => sourceParts(r.source).label || 'no source given';
+  return ask({
+    title: `"${existing.title}" is already here`,
+    body: [
+      `The one here is from ${from(existing)}, ${existing.rating ? `rated ${existing.rating}` : 'not rated'}.`,
+      `The one you are importing, "${incoming.title}", is from ${from(incoming)}.`,
+    ],
+    choices: [
+      { value: 'both', label: `Keep both, as "${both.title}"` },
+      {
+        value: 'replace',
+        label: existing.rating ? `Replace it, keeping your rating of ${existing.rating}` : 'Replace it',
+        danger: true,
+      },
+      { value: 'cancel', label: 'Cancel' },
+    ],
+    dismiss: 'cancel',
+  });
 }
 
 /**

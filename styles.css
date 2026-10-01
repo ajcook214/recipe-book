@@ -220,6 +220,22 @@ textarea { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-
 }
 .import-results .ok .result-mark { color: var(--ok); font-weight: 700; }
 .import-results .error .result-mark { color: var(--danger); font-weight: 700; }
+.import-results .skip .result-mark { color: var(--muted); font-weight: 700; }
+
+/* --- ask(): a question with several answers --- */
+
+.ask {
+  width: min(440px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+}
+.ask::backdrop { background: rgb(0 0 0 / 0.45); }
+.ask h2 { margin: 0 0 8px; }
+.ask p { margin: 6px 0; }
+.ask-choices { display: grid; gap: 8px; margin-top: 16px; }
 .warnings { margin: 6px 0 0; padding-left: 1.2em; color: var(--muted); font-size: 0.9rem; }
 
 /* --- sync --- */

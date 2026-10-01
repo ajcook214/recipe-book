@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeRecipe, slugify } from '../src/core/recipe.js';
+import { keepBoth, normalizeRecipe, placeRecipe, recipeIdFor, slugify } from '../src/core/recipe.js';
 import { displayUnit, formatAmount, formatQty } from '../src/core/quantity.js';
 
 const fixed = { now: () => '2026-09-21T00:00:00.000Z', newId: () => 'new-id' };
@@ -40,10 +40,96 @@ test('things that are not recipes are rejected outright', () => {
   assert.throws(() => normalizeRecipe(raw({ ingredients: undefined })), /no ingredients/);
 });
 
-test('a missing id is assigned, with a warning', () => {
-  const { recipe, warnings } = normalizeRecipe(raw({ id: undefined }), fixed);
+test('a missing id comes from the title, so the file name is readable', () => {
+  const { recipe, warnings } = normalizeRecipe(raw({ id: undefined, title: 'Tomato Soup' }), fixed);
+  assert.equal(recipe.id, 'tomato-soup');
+  assert.deepEqual(warnings, []);
+});
+
+test('a title a file name cannot use gets a random id, with a warning', () => {
+  const { recipe, warnings } = normalizeRecipe(raw({ id: undefined, title: '番茄汤' }), fixed);
   assert.equal(recipe.id, 'new-id');
   assert.equal(warnings.length, 1);
+});
+
+test('an id that cannot be a file name is replaced, with a warning', () => {
+  for (const id of ['../escape', 'recipes/other', '-leading-dash']) {
+    const { recipe, warnings } = normalizeRecipe(raw({ id, title: 'Tomato Soup' }), fixed);
+    assert.equal(recipe.id, 'tomato-soup', id);
+    assert.match(warnings[0] ?? '', /file name/, id);
+  }
+  // Ids from before readable names still import as they are.
+  assert.equal(normalizeRecipe(raw({ id: '31385af4-24eb-4e7f-8760-b371a02d54e5' }), fixed).recipe.id, '31385af4-24eb-4e7f-8760-b371a02d54e5');
+});
+
+test('recipe ids read like their titles, and long ones are cut at a word', () => {
+  assert.equal(recipeIdFor('Tomato Soup'), 'tomato-soup');
+  assert.equal(recipeIdFor("Grandma's Crème Brûlée & Berries!"), 'grandma-s-creme-brulee-berries');
+  const long = recipeIdFor('Firecracker Meatballs with Green Beans and Sesame Rice and a Spicy Mayo Drizzle');
+  assert.equal(long, 'firecracker-meatballs-with-green-beans-and-sesame-rice-and-a');
+  assert.ok(long.length <= 60);
+});
+
+// --- name clashes on import --------------------------------------------------
+
+/** @param {string} id @param {string} title @param {Partial<any>} [over] */
+function have(id, title, over = {}) {
+  return normalizeRecipe(raw({ id, title, source: 'Site A - https://a.example/soup', ...over }), fixed).recipe;
+}
+
+test('an import with a new name lands as new', () => {
+  const incoming = have('tomato-soup', 'Tomato Soup');
+  assert.deepEqual(placeRecipe(incoming, [have('corn-chowder', 'Corn Chowder')]), { kind: 'new' });
+});
+
+test('the same recipe imported again updates it', () => {
+  const here = have('tomato-soup', 'Tomato Soup', { source: 'Site A: https://a.example/soup' });
+  const place = placeRecipe(have('tomato-soup', 'Tomato Soup'), [here]);
+  assert.equal(place.kind, 'update', 'same URL, whatever the label around it');
+});
+
+test('a different recipe with the same id or name clashes, and is never overwritten silently', () => {
+  const here = have('tomato-soup', 'Tomato Soup');
+  const otherSite = have('tomato-soup', 'Tomato Soup', { source: 'https://b.example/soup' });
+  assert.equal(placeRecipe(otherSite, [here]).kind, 'clash', 'same id, another source');
+
+  const noSource = have('tomato-soup', 'Tomato Soup', { source: null });
+  assert.equal(placeRecipe(noSource, [{ ...here, source: null }]).kind, 'clash', 'no source is not proof of anything');
+
+  const sameName = have('31385af4', 'tomato soup!');
+  const place = placeRecipe(sameName, [here]);
+  assert.equal(place.kind, 'clash', 'a name that slugs the same, under another id');
+  assert.equal(place.kind === 'clash' && place.existing.id, 'tomato-soup');
+});
+
+test('a deleted recipe holds neither its id nor its name', () => {
+  const gone = { ...have('tomato-soup', 'Tomato Soup', { source: 'https://b.example/old' }), deleted: true };
+  assert.deepEqual(placeRecipe(have('tomato-soup', 'Tomato Soup'), [gone]), { kind: 'new' });
+});
+
+test('keeping both numbers the new one, title and id together', () => {
+  const incoming = have('tomato-soup', 'Tomato Soup');
+  const here = [have('tomato-soup', 'Tomato Soup')];
+  const second = keepBoth(incoming, here);
+  assert.equal(second.title, 'Tomato Soup 2');
+  assert.equal(second.id, 'tomato-soup-2');
+
+  const third = keepBoth(incoming, [...here, second]);
+  assert.equal(third.title, 'Tomato Soup 3');
+  assert.equal(third.id, 'tomato-soup-3');
+});
+
+test('keeping both skips a number whose id or name is taken, and survives a long title', () => {
+  const incoming = have('tomato-soup', 'Tomato Soup');
+  const here = [have('tomato-soup', 'Tomato Soup'), have('tomato-soup-2', 'Something Else'), have('x', 'Tomato Soup 3')];
+  assert.equal(keepBoth(incoming, here).id, 'tomato-soup-4');
+
+  const title = 'Firecracker Meatballs with Green Beans and Sesame Rice and a Spicy Mayo Drizzle';
+  const base = recipeIdFor(title);
+  const long = have(base, title);
+  const copy = keepBoth(long, [long]);
+  assert.equal(copy.id, `${base}-2`, 'the number is not lost to the cut');
+  assert.notEqual(copy.id, long.id);
 });
 
 test('an out-of-range rating is cleared, not clamped', () => {

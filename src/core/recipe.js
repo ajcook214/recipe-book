@@ -26,6 +26,99 @@ export function slugify(text) {
     .replace(/^-+|-+$/g, '');
 }
 
+/** Longest a recipe id is made, so its file name stays readable. */
+const ID_MAX = 60;
+
+/**
+ * A new recipe's id, and so its file name: the title as a slug.
+ * "Tomato Soup" -> "tomato-soup" -> recipes/tomato-soup.json.
+ *
+ * Fixed once the recipe exists. Renaming a recipe later keeps its file, so
+ * the lines on shopping lists that point at it keep working, and the file
+ * name, a little out of date, is still recognisable. Cut at a word break past
+ * ID_MAX characters. Empty when the title has nothing a slug can keep.
+ *
+ * @param {string} title
+ * @returns {string}
+ */
+export function recipeIdFor(title) {
+  const slug = slugify(title);
+  if (slug.length <= ID_MAX) return slug;
+  const cut = slug.slice(0, ID_MAX + 1).lastIndexOf('-');
+  return slug.slice(0, cut > 0 ? cut : ID_MAX).replace(/-+$/, '');
+}
+
+/**
+ * Whether an id can be used as a file name as it stands. Ids from a file are
+ * kept, so a backup imports back onto the records it came from, but one
+ * with a slash in it would land in another folder.
+ *
+ * @param {string} id
+ * @returns {boolean}
+ */
+export function isSafeId(id) {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id);
+}
+
+/**
+ * The URL in a source like "Serious Eats - https://...", else the text itself.
+ *
+ * @param {string|null} source
+ * @returns {string|null}
+ */
+function sourceKey(source) {
+  return source?.match(/https?:\/\/\S+/)?.[0] ?? source?.trim() ?? null;
+}
+
+/**
+ * Where an imported recipe lands among the ones already here.
+ *
+ * - `new`: nothing here has its id or its name.
+ * - `update`: the recipe at its id came from the same source, so this is the
+ *   same recipe imported again.
+ * - `clash`: a recipe here has its id or its name, and is not known to be the
+ *   same one. The user chooses to cancel, replace it, or keep both.
+ *
+ * Names compare as slugs, so "Tomato Soup" and "tomato soup!" clash. Deleted
+ * recipes hold neither their id nor their name.
+ *
+ * @param {Recipe} incoming
+ * @param {readonly Recipe[]} existing
+ * @returns {{ kind: 'new' } | { kind: 'update' | 'clash', existing: Recipe }}
+ */
+export function placeRecipe(incoming, existing) {
+  const live = existing.filter((r) => !r.deleted);
+  const atId = live.find((r) => r.id === incoming.id);
+  if (atId) {
+    const source = sourceKey(incoming.source);
+    return { kind: source !== null && source === sourceKey(atId.source) ? 'update' : 'clash', existing: atId };
+  }
+  const name = slugify(incoming.title);
+  const named = live.find((r) => slugify(r.title) === name);
+  return named ? { kind: 'clash', existing: named } : { kind: 'new' };
+}
+
+/**
+ * An imported recipe renamed to sit beside one it clashed with: "Tomato
+ * Soup 2", or the next number free. The number goes on the id as well as the
+ * title, after any cut, so a long title cannot lose it.
+ *
+ * @param {Recipe} incoming
+ * @param {readonly Recipe[]} existing
+ * @returns {Recipe}
+ */
+export function keepBoth(incoming, existing) {
+  const live = existing.filter((r) => !r.deleted);
+  const ids = new Set(live.map((r) => r.id));
+  const names = new Set(live.map((r) => slugify(r.title)));
+  const base = recipeIdFor(incoming.title) || 'recipe';
+  for (let n = 2; ; n += 1) {
+    const title = `${incoming.title} ${n}`;
+    const id = `${base}-${n}`;
+    if (!ids.has(id) && !names.has(slugify(title))) return { ...incoming, id, title };
+  }
+}
+
 /** @param {unknown} v @returns {string|null} */
 function textOrNull(v) {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
@@ -99,10 +192,19 @@ export function normalizeRecipe(raw, options = {}) {
   /** @type {string[]} */
   const warnings = [];
 
+  // A file's own id is kept, so a re-import or a backup lands on the record
+  // it came from. Without one, the id comes from the title.
   let id = textOrNull(raw.id);
+  if (id && !isSafeId(id)) {
+    warnings.push(`id ${JSON.stringify(id)} cannot be a file name, so it was replaced`);
+    id = null;
+  }
   if (!id) {
-    id = newId();
-    warnings.push('no id, assigned a new one');
+    id = recipeIdFor(title);
+    if (!id) {
+      id = newId();
+      warnings.push('the title has nothing a file name can use, so the id is random');
+    }
   }
 
   let updatedAt = textOrNull(raw.updatedAt);

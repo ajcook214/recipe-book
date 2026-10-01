@@ -16,7 +16,7 @@ that opens the app with no signal, `DriveAdapter` (`src/adapters/drive.js`),
 passing the adapter contract against real Google Drive, and Google sign-in
 (`src/ui/auth.js`) with a Sync screen (`src/ui/views/sync.js`).
 
-176 tests: 124 run under `npm test`, and 52 need a browser (IndexedDB), so they
+188 tests: 136 run under `npm test`, and 52 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
@@ -111,6 +111,15 @@ accident in a fresh session, and each one exists for a reason.
   The Sync screen says which folder it uses.
 - **The sync watermark never passes a file that failed to pull.** If any pull
   fails, it stays where it was, so the file is listed again next time.
+- **Ids are file names, made to be read** (see `docs/schema.md`). A recipe's
+  is its title as a slug (`recipeIdFor`), fixed once it exists. Never rename a
+  recipe's id when its title changes: list lines point at it. A list's is when
+  it was made (`listIdFor`). Ids from a file are kept if `isSafeId`, so a
+  backup imports back onto its own records.
+- **An import never overwrites a different recipe silently.** `placeRecipe`
+  sorts each import into new, update (same id and same source URL) or clash
+  (id or name taken by something else), and a clash asks: cancel, replace, or
+  keep both (`keepBoth`).
 - List items are stored **one line per source** and combined only for display
   (`groupItems`). `sort` is sparse integers, so moving one item writes one
   number.
@@ -342,6 +351,14 @@ Decisions made in that chat:
 - Drive's error reason is now in the message (`Google Drive 403
   (storageQuotaExceeded): …`). Nav links are now 44px tall, and the brand hides
   below 440px wide so four links and the count fit on one line.
+- **Readable file names** (the owner's request, made before any real data
+  reached Drive, so nothing needed migrating). Recipes are
+  `recipes/<title-slug>.json`, unique by slug; lists are
+  `lists/<made-at>.json`. A clashing import asks to cancel, replace (the new
+  one takes over the old id and keeps its rating), or keep both (numbered).
+  The samples in `local-data/` were rewritten to the new ids. Before the
+  two-device check, each device's old UUID-keyed copy and the `RecipeApp-dev`
+  folder are cleared, and the samples re-imported.
 
 **Why:** the point of the whole project. After this, the phone and the desktop
 hold the same data.
@@ -457,6 +474,10 @@ Recorded so no session has to rediscover them:
   `403 appNotAuthorizedToChild`, seen on `RecipeApp-tests/` after two test
   runs. Trashing single files works. The app never trashes folders, so this
   was not pursued. Delete test folders in the Drive web UI.
+- **Recipe names are unique per device until it syncs.** Two devices that
+  each import a different recipe with the same new name, before either
+  syncs, share one file, and last-writer-wins keeps the newer. It takes two
+  devices importing by hand at once.
 - **Sign-in from an iPhone home-screen app is untested.** Google's popup may
   not work there. The owner does not use an iPhone, so this is very low
   priority.
@@ -473,6 +494,8 @@ first thing to build once the build is stable.
 - An edit form for every field, including add, remove and reorder of
   ingredients and steps, plus "New recipe" for something with no website.
 - Reuse `normalizeRecipe` on save, so hand-edits meet the same bar as imports.
+- A new title must be unique by slug, as on import (`placeRecipe`). A rename
+  keeps the recipe's id and file; only "New recipe" makes an id.
 - The fiddly part is ingredient rows on a phone. Keep amount, unit and item as
   three fields rather than one parsed string.
 

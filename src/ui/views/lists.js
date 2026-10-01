@@ -1,5 +1,5 @@
 // @ts-check
-import { listRecords, saveLocal } from '../../core/db.js';
+import { listEnvelopes, listRecords, saveLocal } from '../../core/db.js';
 import { groupItems, newList } from '../../core/list.js';
 import { h } from '../dom.js';
 
@@ -22,7 +22,8 @@ export async function render(ctx) {
       type: 'button',
       class: 'button',
       onclick: async () => {
-        const list = newList(defaultListName());
+        const taken = new Set((await listEnvelopes(ctx.db, 'list')).map((e) => e.id));
+        const list = newList(defaultListName(), taken);
         await saveLocal(ctx.db, 'list', list);
         ctx.navigate(`#/list/${encodeURIComponent(list.id)}`);
       },

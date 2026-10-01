@@ -1,6 +1,6 @@
 // @ts-check
 import { scaledQty } from './quantity.js';
-import { slugify } from './recipe.js';
+import { isSafeId, slugify } from './recipe.js';
 import { combineAmount } from './units.js';
 
 /**
@@ -103,16 +103,37 @@ export function newItem(text, options = {}) {
 // --- lists and rows --------------------------------------------------------
 
 /**
+ * A new list's id, and so its file name: when it was made, to the second, in
+ * local time. "2026-09-30-143205" -> lists/2026-09-30-143205.json. Lists are
+ * named "Shopping Sep 30" and renamed freely, so the time says more than the
+ * name would. One made in the same second as a list already here, deleted or
+ * not, gets "-2", "-3".
+ *
+ * @param {Date} date
+ * @param {ReadonlySet<string>} taken  the id of every list here, deleted ones included
+ * @returns {string}
+ */
+export function listIdFor(date, taken) {
+  const two = (/** @type {number} */ n) => String(n).padStart(2, '0');
+  const day = `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+  const base = `${day}-${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n += 1) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+}
+
+/**
  * @param {string} name
+ * @param {ReadonlySet<string>} taken  the id of every list here, deleted ones included
  * @param {ItemOptions} [options]
  * @returns {import('./types.js').ShoppingList}
  */
-export function newList(name, options = {}) {
-  const { newId, now } = defaults(options);
+export function newList(name, taken, options = {}) {
+  const { now } = defaults(options);
+  const at = now();
   return {
-    id: newId(),
+    id: listIdFor(new Date(at), taken),
     schemaVersion: 1,
-    updatedAt: now(),
+    updatedAt: at,
     deleted: false,
     name,
     archived: false,
@@ -240,6 +261,12 @@ export function normalizeList(raw, options = {}) {
   const warnings = [];
   const at = now();
 
+  let id = textOrNull(raw.id);
+  if (id && !isSafeId(id)) {
+    warnings.push(`id ${JSON.stringify(id)} cannot be a file name, so it was replaced`);
+    id = null;
+  }
+
   /** @type {ListItem[]} */
   const items = [];
   raw.items.forEach((/** @type {any} */ it, /** @type {number} */ i) => {
@@ -274,7 +301,7 @@ export function normalizeList(raw, options = {}) {
 
   return {
     list: {
-      id: textOrNull(raw.id) ?? newId(),
+      id: id ?? newId(),
       schemaVersion: 1,
       updatedAt: at,
       deleted: raw.deleted === true,

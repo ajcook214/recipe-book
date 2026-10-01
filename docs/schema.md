@@ -3,6 +3,20 @@
 `schemaVersion` is `1` for everything below. Every top-level record carries
 `id`, `updatedAt` (ISO 8601, UTC) and `deleted`.
 
+The `id` is also the file name, so it is made to be read:
+
+- **A recipe's id is its title as a slug**: `"Tomato Soup"` → `"tomato-soup"` →
+  `recipes/tomato-soup.json`. At most 60 characters, cut at a word break. It is
+  fixed once the recipe exists; renaming the recipe later keeps the file, so
+  list lines that point at it keep working. Titles are unique by slug: an
+  import with a name already taken asks to cancel, replace, or keep both,
+  and keeping both numbers the new one ("Tomato Soup 2", `tomato-soup-2`).
+- **A list's id is when it was made**, in local time to the second:
+  `lists/2026-09-30-143205.json`. Lists get renamed freely, and duplicate
+  names are normal for them.
+- Ids are limited to letters, digits, `-` and `_`. Older records with UUID
+  ids still load as they are.
+
 ## Shared conventions
 
 - **`key`** — a slug derived from an item name (`"Ground Beef"` → `"ground-beef"`).
@@ -24,11 +38,11 @@
 }
 ```
 
-## `recipes/<uuid>.json`
+## `recipes/<id>.json`
 
 ```jsonc
 {
-  "id": "0d6f…",
+  "id": "weeknight-chili",            // the title as a slug; the file name
   "schemaVersion": 1,
   "updatedAt": "2026-09-20T17:04:00.000Z",
   "deleted": false,
@@ -67,11 +81,11 @@
 Scaling multiplies `qty` by `target / servings` for every ingredient where
 `scalable` is `true`. Unscalable ingredients pass through untouched.
 
-## `lists/<uuid>.json`
+## `lists/<id>.json`
 
 ```jsonc
 {
-  "id": "9ab3…",
+  "id": "2026-09-20-170400",          // when it was made; the file name
   "schemaVersion": 1,
   "updatedAt": "2026-09-20T17:04:00.000Z",
   "deleted": false,
@@ -81,7 +95,7 @@ Scaling multiplies `qty` by `target / servings` for every ingredient where
 
   "items": [
     {
-      "id": "c14e…",                  // stable; the unit of per-item merge
+      "id": "c14e…",                  // a UUID; stable; the unit of per-item merge
       "text": "ground beef",
       "key": "ground-beef",           // slug; free-form text gets one too
       "qty": 3, "unit": "lb",
@@ -90,7 +104,7 @@ Scaling multiplies `qty` by `target / servings` for every ingredient where
       "sort": 100,
       "updatedAt": "2026-09-20T17:04:00.000Z",   // per item, for merge
       "from": {                       // null when added by hand
-        "recipeId": "0d6f…",
+        "recipeId": "weeknight-chili",
         "recipeTitle": "Weeknight Chili",
         "scale": 2
       }
