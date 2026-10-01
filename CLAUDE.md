@@ -194,8 +194,9 @@ of salt.
 
 - None blocking. The minimal UI (recipes, lists, catalog, import) is live on
   Pages, and `sw.js` makes it open with no signal. Sign-in and the Sync screen
-  work against real Drive. localhost syncs with `RecipeApp-dev`, and only
-  Pages with the real `RecipeApp`. What's left of [roadmap](docs/roadmap.md)
-  chunk 4 is the two-device check on Pages.
+  work against real Drive, and the phone and the desktop sync through it.
+  localhost syncs with `RecipeApp-dev`, and only Pages with the real
+  `RecipeApp`. What's left in the [roadmap](docs/roadmap.md) (chunks 5 and
+  6) is polish.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

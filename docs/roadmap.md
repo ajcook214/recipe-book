@@ -22,8 +22,8 @@ green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
 so run it by hand whenever `drive.js` changes.
 
-Missing for v1: only the two-device check that closes chunk 4. Chunks 5 and 6
-are polish.
+v1 works end to end: recipes and lists sync between the desktop and the phone
+through Drive. Chunks 5 and 6 are polish.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
@@ -325,15 +325,21 @@ the adapter contract."
 
 ## 4. Sign-in and the Sync screen
 
-**Status:** built 2026-09-30; the two-device check is still to do. On
-localhost, a real Google sign-in pushed the owner's 7 sample records to
-`My Drive / RecipeApp-dev/`. Every other path was clicked through in the
+**Status:** done 2026-10-01. On Pages, the owner added the samples on the
+desktop, synced them to `My Drive / RecipeApp/`, and synced the phone. A list
+changed on both devices, with the phone in airplane mode, merged correctly on
+both after each synced. Earlier, on localhost, a real Google sign-in pushed
+the same 7 records to `My Drive / RecipeApp-dev/`. Every other path was clicked through in the
 browser pane against a stand-in token client and the fake Drive: a second
 device's edit and check-off pulled with no new sign-in, a hand-broken file
 reported and then pulled once fixed, a token refused part way through, a
 closed sign-in window, Drive access unticked, offline, Drive unreachable,
-leaving the screen mid-sync, and the layout at 375px. **Still to verify:** the
-Done-when below, on Pages, desktop and phone.
+leaving the screen mid-sync, and the layout at 375px.
+
+On the phone, airplane mode first failed with "site can't be reached",
+because clearing the site's data had also removed the service worker. One
+visit with a signal reinstalled it. See the known gap about the address
+without its final slash.
 
 Decisions made in that chat:
 - **localhost syncs with `RecipeApp-dev`**, Pages with `RecipeApp` (see the
