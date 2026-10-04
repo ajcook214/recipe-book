@@ -23,13 +23,15 @@ Identical in Drive and in a local folder:
 
 ```
 RecipeApp/
-  manifest.json          { schemaVersion, lastModified }
-  recipes/<uuid>.json
-  lists/<uuid>.json
-  images/<uuid>.jpg
+  recipes/<id>.json      recipes/tomato-soup.json
+  lists/<id>.json        lists/2026-09-30-143205.json
+  catalog.json           the common items
+  images/<uuid>.jpg      (not yet used)
 ```
 
-Every record carries `id`, `updatedAt`, and a `deleted` tombstone flag.
+Every record carries `id`, `updatedAt`, `schemaVersion`, and a `deleted`
+tombstone flag. Deletes older than 30 days are cleared out on sync. The Import
+screen downloads everything as one JSON backup, and takes it back.
 
 ## Development
 

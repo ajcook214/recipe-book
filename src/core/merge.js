@@ -191,6 +191,38 @@ function compareCatalogItems(a, b) {
 }
 
 /**
+ * Whether a tombstone is old enough to drop: deleted, and last changed
+ * before the cutoff. A corrupt timestamp counts as oldest, as everywhere in
+ * this file; such a tombstone already loses every merge.
+ *
+ * @param {{ deleted?: boolean, updatedAt?: unknown }} value
+ * @param {number} cutoff  ms since the epoch
+ * @returns {boolean}
+ */
+export function isPrunable(value, cutoff) {
+  return value.deleted === true && timeOf(value.updatedAt) < cutoff;
+}
+
+/**
+ * A list or the catalog without its item tombstones older than the cutoff.
+ * The record itself comes back unchanged, the same object, when there are
+ * none, so the caller can tell that nothing was dropped.
+ *
+ * Only safe on a record whose every tombstone has reached storage: one with
+ * nothing waiting to be pushed. A tombstone dropped before it is pushed was
+ * never a delete anywhere else.
+ *
+ * @template {{ items: any[] }} T
+ * @param {T} record
+ * @param {number} cutoff  ms since the epoch
+ * @returns {T}
+ */
+export function pruneItems(record, cutoff) {
+  const items = record.items.filter((item) => !isPrunable(item, cutoff));
+  return items.length === record.items.length ? record : { ...record, items };
+}
+
+/**
  * Merge two versions of a recipe. Whole-record last-writer-wins.
  *
  * @param {Recipe|null|undefined} local

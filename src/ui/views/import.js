@@ -1,7 +1,9 @@
 // @ts-check
+import { backupContents, backupFileName, isBackup, makeBackup } from '../../core/backup.js';
 import { getRecord, listRecords, saveLocal } from '../../core/db.js';
+import { messageOf } from '../../core/errors.js';
 import { normalizeCatalog, normalizeList } from '../../core/list.js';
-import { mergeCatalog } from '../../core/merge.js';
+import { isSame, mergeCatalog, mergeList } from '../../core/merge.js';
 import { keepBoth, normalizeRecipe, placeRecipe } from '../../core/recipe.js';
 import { ask, h, nowIso, sourceParts } from '../dom.js';
 
@@ -13,7 +15,9 @@ import { ask, h, nowIso, sourceParts } from '../dom.js';
  * Drive files itself. (Under the drive.file scope, files dropped straight into
  * Drive are invisible to the app.)
  *
- * @param {{ db: IDBDatabase }} ctx
+ * Backups go out from here too, and come back in the same way.
+ *
+ * @param {{ db: IDBDatabase, flash: (msg: string) => void }} ctx
  * @returns {Promise<HTMLElement>}
  */
 export async function render(ctx) {
@@ -32,76 +36,169 @@ export async function render(ctx) {
       return;
     }
 
-    // One record per file is the norm, but accept an array for bulk pastes.
-    for (const raw of Array.isArray(parsed) ? parsed : [parsed]) {
-      const kind = kindOf(raw);
-
-      if (kind === 'list') {
-        try {
-          const { list, warnings } = normalizeList(raw);
-          const existing = await getRecord(ctx.db, 'list', list.id);
-          await saveLocal(ctx.db, 'list', list);
-          const verb = existing && !existing.deleted ? 'Updated' : 'Imported';
-          report('ok', label, `${verb} list "${list.name}" (${list.items.length} items)`, warnings, undefined, `#/list/${encodeURIComponent(list.id)}`);
-        } catch (err) {
-          report('error', label, err instanceof Error ? err.message : String(err));
-        }
-        continue;
-      }
-
-      if (kind === 'catalog') {
-        try {
-          const { catalog, warnings } = normalizeCatalog(raw);
-          // Merge rather than replace: importing staples must not throw away
-          // entries this device has learned from use.
-          const merged = mergeCatalog(await getRecord(ctx.db, 'catalog'), catalog);
-          await saveLocal(ctx.db, 'catalog', merged);
-          report('ok', label, `Merged ${catalog.items.length} catalog items`, warnings);
-        } catch (err) {
-          report('error', label, err instanceof Error ? err.message : String(err));
-        }
-        continue;
-      }
-
-      try {
-        const { recipe, warnings } = normalizeRecipe(raw);
-        const here = await listRecords(ctx.db, 'recipe');
-        const place = placeRecipe(recipe, here);
-
-        let incoming = recipe;
-        let verb = 'Imported';
-        if (place.kind === 'update') {
-          verb = 'Updated';
-          // Rating is the owner's judgement, not something ingestion knows.
-          // Re-importing a re-summarized recipe must not wipe it.
-          incoming = { ...recipe, rating: recipe.rating ?? place.existing.rating ?? null };
-        } else if (place.kind === 'clash') {
-          const both = keepBoth(recipe, here);
-          const choice = await askAboutClash(recipe, place.existing, both);
-          if (choice === 'cancel') {
-            report('skip', label, `Skipped "${recipe.title}"; the one already here is unchanged`);
-            continue;
-          }
-          if (choice === 'replace') {
-            verb = 'Replaced';
-            // Takes over the old one's id, so list lines that point at it,
-            // and its file, carry on.
-            incoming = { ...recipe, id: place.existing.id, rating: recipe.rating ?? place.existing.rating ?? null };
-          } else {
-            incoming = both;
-          }
-        }
-
-        // The import itself is the edit. Stamping it now means a re-import
-        // wins over the older copy on the next sync, instead of losing a
-        // last-writer-wins comparison against the file's original timestamp.
-        incoming = { ...incoming, updatedAt: nowIso() };
-        await saveLocal(ctx.db, 'recipe', incoming);
-        report('ok', label, `${verb} "${incoming.title}"`, warnings, incoming.id);
-      } catch (err) {
-        report('error', label, err instanceof Error ? err.message : String(err));
-      }
+    if (isBackup(parsed)) {
+      await restore(label, parsed);
+      return;
     }
+
+    // One record per file is the norm, but accept an array for bulk pastes.
+    for (const raw of Array.isArray(parsed) ? parsed : [parsed]) await importRecord(label, raw);
+  }
+
+  /**
+   * A backup goes in record by record, through the same checks as any other
+   * import, after one question.
+   *
+   * @param {string} label
+   * @param {any} raw
+   */
+  async function restore(label, raw) {
+    let contents;
+    try {
+      contents = backupContents(raw);
+    } catch (err) {
+      report('error', label, messageOf(err));
+      return;
+    }
+    const { recipes, lists, catalog } = contents;
+    const made = Date.parse(raw.exportedAt);
+    const when = Number.isNaN(made)
+      ? 'an unknown date'
+      : new Date(made).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const staples = Array.isArray(catalog?.items) ? catalog.items.length : 0;
+
+    const choice = await ask({
+      title: `Restore the backup from ${when}?`,
+      body: [
+        `It has ${plural(recipes.length, 'recipe')}, ${plural(lists.length, 'shopping list')} and ${plural(staples, 'common item')}.`,
+        'Recipes come back as the backup has them. One here with the same name from another source asks first, as any import does.',
+        'Lists and common items are merged with the ones here, so nothing added since is lost.',
+      ],
+      choices: [
+        { value: 'restore', label: 'Restore' },
+        { value: 'cancel', label: 'Cancel' },
+      ],
+      dismiss: 'cancel',
+    });
+    if (choice !== 'restore') {
+      report('skip', label, 'Backup not restored');
+      return;
+    }
+
+    for (const record of [...recipes, ...lists, ...(catalog ? [catalog] : [])]) await importRecord(label, record);
+    report('ok', label, `Restored the backup from ${when}`);
+  }
+
+  /**
+   * @param {string} label
+   * @param {any} raw  one record
+   */
+  async function importRecord(label, raw) {
+    const kind = kindOf(raw);
+
+    if (kind === 'list') {
+      try {
+        const { list, warnings } = normalizeList(raw);
+        const existing = await getRecord(ctx.db, 'list', list.id);
+        const href = `#/list/${encodeURIComponent(list.id)}`;
+        // Merged rather than replaced, like the catalog: anything added to the
+        // list here since the file was made, and not yet synced, would
+        // otherwise be lost.
+        const merged = mergeList(existing, list) ?? list;
+        if (existing && sameContent(merged, existing)) {
+          report('skip', label, `List "${list.name}" is unchanged`, warnings, undefined, href);
+          return;
+        }
+        await saveLocal(ctx.db, 'list', merged);
+        const verb = existing && !existing.deleted ? 'Updated' : 'Imported';
+        report('ok', label, `${verb} list "${merged.name}" (${list.items.length} items)`, warnings, undefined, href);
+      } catch (err) {
+        report('error', label, messageOf(err));
+      }
+      return;
+    }
+
+    if (kind === 'catalog') {
+      try {
+        const { catalog, warnings } = normalizeCatalog(raw);
+        // Merge rather than replace: importing staples must not throw away
+        // entries this device has learned from use.
+        const existing = await getRecord(ctx.db, 'catalog');
+        const merged = mergeCatalog(existing, catalog);
+        if (existing && sameContent(merged, existing)) {
+          report('skip', label, 'Common items are unchanged', warnings);
+          return;
+        }
+        await saveLocal(ctx.db, 'catalog', merged);
+        report('ok', label, `Merged ${catalog.items.length} catalog items`, warnings);
+      } catch (err) {
+        report('error', label, messageOf(err));
+      }
+      return;
+    }
+
+    try {
+      const { recipe, warnings } = normalizeRecipe(raw);
+      const here = await listRecords(ctx.db, 'recipe');
+      const place = placeRecipe(recipe, here);
+
+      let incoming = recipe;
+      let verb = 'Imported';
+      if (place.kind === 'update') {
+        verb = 'Updated';
+        // Rating is the owner's judgement, not something ingestion knows.
+        // Re-importing a re-summarized recipe must not wipe it.
+        incoming = { ...recipe, rating: recipe.rating ?? place.existing.rating ?? null };
+        if (sameContent(incoming, place.existing)) {
+          report('skip', label, `"${incoming.title}" is unchanged`, warnings, incoming.id);
+          return;
+        }
+      } else if (place.kind === 'clash') {
+        const both = keepBoth(recipe, here);
+        const choice = await askAboutClash(recipe, place.existing, both);
+        if (choice === 'cancel') {
+          report('skip', label, `Skipped "${recipe.title}"; the one already here is unchanged`);
+          return;
+        }
+        if (choice === 'replace') {
+          verb = 'Replaced';
+          // Takes over the old one's id, so list lines that point at it,
+          // and its file, carry on.
+          incoming = { ...recipe, id: place.existing.id, rating: recipe.rating ?? place.existing.rating ?? null };
+        } else {
+          incoming = both;
+        }
+      }
+
+      // The import itself is the edit. Stamping it now means a re-import
+      // wins over the older copy on the next sync, instead of losing a
+      // last-writer-wins comparison against the file's original timestamp.
+      incoming = { ...incoming, updatedAt: nowIso() };
+      await saveLocal(ctx.db, 'recipe', incoming);
+      report('ok', label, `${verb} "${incoming.title}"`, warnings, incoming.id);
+    } catch (err) {
+      report('error', label, messageOf(err));
+    }
+  }
+
+  /** Everything on this device, as one file in the downloads folder. */
+  async function download() {
+    const [recipes, lists, catalog] = await Promise.all([
+      listRecords(ctx.db, 'recipe'),
+      listRecords(ctx.db, 'list'),
+      getRecord(ctx.db, 'catalog'),
+    ]);
+    const backup = makeBackup({ recipes, lists, catalog }, nowIso());
+    // Indented, with a final newline, the same as the files in Drive.
+    const blob = new Blob([`${JSON.stringify(backup, null, 2)}\n`], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = h('a', { href: url, download: backupFileName(new Date()), hidden: true });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    // Revoked later, not now: the download may not have started reading it.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    ctx.flash(`Backed up ${plural(backup.recipes.length, 'recipe')} and ${plural(backup.lists.length, 'list')}`);
   }
 
   /**
@@ -154,7 +251,7 @@ export async function render(ctx) {
     h(
       'p',
       { class: 'muted' },
-      'Recipe, shopping list or catalog JSON files. A recipe imported again from the same source updates the one you have; another recipe with a name already here asks what to do. A catalog merges into the one you have.',
+      'Recipe, shopping list or catalog JSON files, or a backup made below. A recipe imported again from the same source updates the one you have; another recipe with a name already here asks what to do. Lists and the catalog merge into the ones you have.',
     ),
     h('label', { class: 'button file-button' }, 'Choose files…', fileInput),
     h('h2', null, 'Or paste'),
@@ -172,7 +269,35 @@ export async function render(ctx) {
       'Import pasted JSON',
     ),
     results,
+    h('h2', null, 'Back up'),
+    h(
+      'p',
+      { class: 'muted' },
+      'Everything on this device in one file: recipes, lists and common items, as plain JSON you can read without the app. Sync first to include what your other devices have. Import the file here to restore it.',
+    ),
+    h('button', { type: 'button', onclick: download }, 'Download a backup'),
   );
+}
+
+/**
+ * @param {number} n
+ * @param {string} word
+ * @returns {string}
+ */
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * The same apart from when it was last saved: an import that would change
+ * nothing is not worth writing, or pushing.
+ *
+ * @param {any} a
+ * @param {any} b
+ * @returns {boolean}
+ */
+function sameContent(a, b) {
+  return isSame({ ...a, updatedAt: null }, { ...b, updatedAt: null });
 }
 
 /**

@@ -618,3 +618,125 @@ test('repeated syncing settles instead of ping-ponging', { skip: browserOnly }, 
     assert.equal(fromA.items.length, 2);
   });
 });
+
+// --- pruning old deletes ---------------------------------------------------
+//
+// The memory adapter stamps files from 2026-01-01, so by the clock above every
+// file has been in storage for months. OLD is past the 30-day margin; T1 to
+// T3 are within it.
+
+const OLD = '2026-08-01T00:00:00.000Z';
+
+test('an old delete is dropped here and trashed in storage, once it has been pushed', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    await saveLocal(db, 'recipe', recipe({ deleted: true, updatedAt: OLD }));
+
+    const first = await sync(db, adapter, clock);
+    assert.equal(first.pruned, 0, 'not before it has reached storage');
+    assert.equal(adapter._read('recipes/r1.json')?.deleted, true);
+
+    const second = await sync(db, adapter, clock);
+    assert.equal(second.pruned, 1);
+    assert.equal(second.errors.length, 0);
+    assert.equal(await getEnvelope(db, 'recipes/r1.json'), undefined);
+    assert.deepEqual(adapter._paths(), []);
+  });
+});
+
+test('a recent delete is kept', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    await saveLocal(db, 'recipe', recipe({ deleted: true, updatedAt: T2 }));
+    await sync(db, adapter, clock);
+    const again = await sync(db, adapter, clock);
+    assert.equal(again.pruned, 0);
+    assert.ok(await getEnvelope(db, 'recipes/r1.json'));
+    assert.deepEqual(adapter._paths(), ['recipes/r1.json']);
+  });
+});
+
+test('a delete made long ago but pushed only now waits its full margin in storage', { skip: browserOnly }, async () => {
+  // A device that sat a month without syncing. The others have not heard of
+  // the delete yet, however old it is.
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    const early = { now: () => '2026-01-02T00:00:00.000Z' };
+    await saveLocal(db, 'recipe', recipe({ deleted: true, updatedAt: '2025-11-01T00:00:00.000Z' }));
+    await sync(db, adapter, early);
+    assert.equal((await sync(db, adapter, early)).pruned, 0, 'in storage for a day');
+
+    const later = await sync(db, adapter, { now: () => '2026-02-15T00:00:00.000Z' });
+    assert.equal(later.pruned, 1, 'in storage for six weeks');
+  });
+});
+
+test('old deleted items leave the list and its file, and the other device follows without ping-pong', { skip: browserOnly }, async () => {
+  await withTwoDevices(async (a, b, adapter) => {
+    await saveLocal(a, 'list', shoppingList([
+      item({ id: 'keep' }),
+      item({ id: 'gone', deleted: true, updatedAt: OLD }),
+      item({ id: 'recent', deleted: true, updatedAt: T2, sort: 300 }),
+    ]));
+    const first = await sync(a, adapter, clock);
+    assert.equal(first.pruned, 0, 'A had not pushed them yet');
+    assert.equal(adapter._read('lists/l1.json')?.items.length, 3);
+
+    // B pulls it, prunes, and pushes it back without the old tombstone.
+    await sync(b, adapter, clock);
+    assert.deepEqual(adapter._read('lists/l1.json')?.items.map((/** @type {any} */ i) => i.id), ['keep', 'recent']);
+
+    // A still holds the old tombstone, and must not hand it back.
+    const back = await sync(a, adapter, clock);
+    assert.equal(back.pushed, 0, 'A takes the pruned file as it is');
+    assert.deepEqual((await getRecord(a, 'list', 'l1')).items.map((/** @type {any} */ i) => i.id), ['keep', 'recent']);
+
+    const quietA = await sync(a, adapter, clock);
+    const quietB = await sync(b, adapter, clock);
+    assert.equal(quietA.pushed + quietB.pushed + quietA.pruned + quietB.pruned, 0, 'settled');
+    assert.deepEqual(await getRecord(a, 'list', 'l1'), await getRecord(b, 'list', 'l1'));
+  });
+});
+
+test('old deleted catalog entries are dropped too', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    await saveLocal(db, 'catalog', catalog([catItem(), catItem({ key: 'milk', deleted: true, updatedAt: OLD })]));
+    await sync(db, adapter, clock);
+    const second = await sync(db, adapter, clock);
+    assert.equal(second.pruned, 1);
+    assert.equal(second.pushed, 1, 'the smaller catalog is pushed');
+    assert.deepEqual(adapter._read('catalog.json')?.items.map((/** @type {any} */ c) => c.key), ['flour']);
+  });
+});
+
+test('a file storage has changed since is not trashed, even if this copy missed the change', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    await saveLocal(db, 'recipe', recipe({ deleted: true, updatedAt: OLD }));
+    await sync(db, adapter, clock);
+
+    // Another device brings it back, and the watermark somehow passes the change.
+    adapter._touch('recipes/r1.json', recipe({ title: 'Back again', updatedAt: T3 }));
+    await setMeta(db, LAST_SYNC_KEY, '2099-01-01T00:00:00.000Z');
+
+    const result = await sync(db, adapter, clock);
+    assert.equal(result.pruned, 0);
+    assert.equal(adapter._read('recipes/r1.json')?.title, 'Back again');
+    assert.ok(await getEnvelope(db, 'recipes/r1.json'), 'and the copy here is kept');
+  });
+});
+
+test('nothing is pruned on a pass where a pull failed', { skip: browserOnly }, async () => {
+  await withDb(async (db) => {
+    const adapter = createMemoryAdapter();
+    await saveLocal(db, 'recipe', recipe({ deleted: true, updatedAt: OLD }));
+    await sync(db, adapter, clock);
+
+    adapter._seed('recipes/broken.json', recipe({ id: 'not-broken' }));
+    const result = await sync(db, adapter, clock);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.pruned, 0);
+    assert.ok(adapter._read('recipes/r1.json'));
+  });
+});

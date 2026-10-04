@@ -14,17 +14,19 @@ against an in-memory adapter), recipes with scaling and ratings, shopping lists
 with combining and the catalog, JSON import, a service worker (`sw.js`)
 that opens the app with no signal, `DriveAdapter` (`src/adapters/drive.js`),
 passing the adapter contract against real Google Drive, Google sign-in
-(`src/ui/auth.js`) with a Sync screen (`src/ui/views/sync.js`), and editing
-lists and the catalog (`src/ui/views/catalog.js`).
+(`src/ui/auth.js`) with a Sync screen (`src/ui/views/sync.js`), editing
+lists and the catalog (`src/ui/views/catalog.js`), backups
+(`src/core/backup.js`), pruning old deletes on sync, and archiving lists.
 
-201 tests: 149 run under `npm test`, and 52 need a browser (IndexedDB), so they
+218 tests: 159 run under `npm test`, and 59 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
 so run it by hand whenever `drive.js` changes.
 
-v1 works end to end: recipes and lists sync between the desktop and the phone
-through Drive. Chunk 6 is polish.
+v1 is done: every chunk below is built. Recipes and lists sync between the
+desktop and the phone through Drive. What is left is checking by hand (see
+**Still to check by hand**, below the chunks), then what comes after v1.
 
 | # | Chunk | Size | Leaves you with |
 |---|-------|------|-----------------|
@@ -35,8 +37,7 @@ through Drive. Chunk 6 is polish.
 | 5 | List and catalog editing | M | Amounts, order, and managing staples |
 | 6 | Backup, pruning, archiving | S | An exit door and a tidy store |
 
-Chunk 6 is independent of everything above. Do it, or skip it; the app is
-usable without it.
+All six are done.
 
 ---
 
@@ -110,6 +111,15 @@ accident in a fresh session, and each one exists for a reason.
   and would turn every push into a false conflict.
 - **Deletes are tombstones** (`deleted: true`), never removal from the store.
   `forget()` exists only for pruning something already propagated.
+- **Only sync prunes tombstones**, after `KEEP_DELETES_DAYS` (30), and only
+  from records with nothing waiting to push: then every tombstone in them has
+  reached storage. A deleted record also needs its file to have held the
+  tombstone that long, by storage's clock. A file is trashed only if storage
+  still has the version this copy last saw. Pulling prunes too, or two devices
+  would hand a pruned tombstone back and forth for ever.
+- **Imports merge lists and the catalog; they never replace them.** A list on
+  this device may hold items not yet synced. An import that changes nothing
+  writes nothing, so it adds nothing to push.
 - **localhost syncs with `My Drive / RecipeApp-dev`**, and only Pages syncs
   with the real `RecipeApp` (`DEV_DRIVE_FOLDER` in `src/config.js`). Trying
   things out, or a sync bug under development, never touches the real data.
@@ -149,6 +159,10 @@ accident in a fresh session, and each one exists for a reason.
   `SUITES` array in `test/browser/index.html`.
 - For anything that can silently eat data, **check the failure path too**:
   break it on purpose, confirm the tests go red, then put it back.
+- **In the browser pane, a `<dialog>`'s `close` event waits for a painted
+  frame**, and the pane does not paint while hidden. So `ask()` and
+  `editDialog()` seem to hang after a scripted click. Take a screenshot and
+  they finish. A visible page is not affected.
 - **Every adapter runs the shared contract** in
   `test/helpers/adapter-contract.js`. `DriveAdapter` runs it against a fake
   Drive (`test/helpers/fake-drive.js`) under `npm test`, and against real Drive
@@ -476,7 +490,43 @@ editing."
 
 ## 6. Backup, pruning, archiving
 
-**Status:** not started.
+**Status:** done 2026-10-04. Pruning is proven by seven new sync tests in
+`test/browser/sync.test.js`, and each of its five safety checks was broken on
+purpose and turned a test red. In the browser pane at 375px, on the samples:
+a backup's contents (read from the download link without saving a file), a
+restore over changed data (a deleted recipe came back, a list item added
+since and a rating given since both survived, everything else unchanged), a
+damaged backup refused, Cancel, re-importing the samples writing nothing,
+archive and unarchive, the archived list missing from a recipe's list picker,
+the Sync report's pruning line, no sideways scroll, 44px targets. Not
+verified, and on the list below: a real download on the phone, a restore on
+another device, archiving across a sync, and pruning against real Drive,
+which cannot happen before 30 days have passed.
+
+Decisions made in that chat:
+- **`manifest.json` is dropped** from the layout and the schema. Nothing read
+  it, every file already carries `schemaVersion`, and writing it on each sync
+  would have been a Drive revision a sync for nothing.
+- **A backup is one JSON file, not a zip.** No dependencies means a zip
+  writer and reader by hand; one indented JSON file reads without the app
+  and imports back. Format in `docs/schema.md`. It leaves out tombstones and
+  deleted items, and holds archived lists. The button is on the Import
+  screen, which restores it after one question.
+- **Restoring merges lists and the catalog** with what is there, and list
+  import in general now merges rather than replaces (see the working
+  agreements). Recipes go through the ordinary import, so a recipe from the
+  same source comes back as the backup has it. Anything unchanged is
+  reported as such and not written.
+- **Pruning runs inside sync, after 30 days**, matching Drive's trash. A
+  pruned record's file goes to the trash; pruned items just leave their
+  file. The Sync report says how many were cleared. Details in the working
+  agreements and in `prune()` in `sync.js`.
+- **Archiving is a button on the list**, with no question, since it is undone
+  as easily. Archived lists fold away under "Archived lists" on the Lists
+  screen, open as usual, and say so, with Unarchive.
+- **The dev data set** is a backup from Pages saved in `local-data/` and
+  imported on localhost, which syncs only to `RecipeApp-dev`. For a clean
+  start, clear the site's data and delete `RecipeApp-dev` in Drive first.
 
 **Why:** small loose ends, one chat.
 
@@ -502,16 +552,59 @@ editing."
 
 ---
 
+## Still to check by hand
+
+What the tests and the browser pane cannot reach: a real phone, real Drive,
+and time. Strike each out here once it has been seen to work.
+
+**This update reaching the phone**
+1. Open the app on the phone with a signal. Within a few seconds a "new
+   version is ready" banner appears; tap Reload.
+2. Then airplane mode, close the app fully, and open it from the home-screen
+   icon. It should open, and Lists → Common items, and Import, should both
+   load. They are new files in the offline cache.
+
+**Lists (chunk 5)**
+3. In edit mode on the phone, drag a row by ☰ with a finger, up and down.
+4. On a list longer than the screen, drag a row towards the bottom edge and
+   hold it there. The page should scroll by itself.
+5. Tap a row in edit mode and change its amount. The keypad should be a
+   number pad. Save, then check the amount reads right.
+6. Rename a common item and pin another on the phone, sync, then sync the
+   desktop. Both changes should be there.
+
+**Archiving**
+7. Archive a finished list on the phone and sync. Sync the desktop: the list
+   should be under "Archived lists". Unarchive it there, sync both, and it
+   should be back on the phone.
+
+**Backups**
+8. On the phone: Import → Download a backup. The file should land in
+   Downloads as `recipe-book-<date>.json`, and open as readable text.
+9. On the desktop, on Pages: sync, then download a backup and save it in
+   `local-data/`. On localhost, import it. The question should count what is
+   in it; after Restore, the recipes and lists are there. Sync on localhost:
+   the Sync screen should name `RecipeApp-dev`, never `RecipeApp`.
+
+**Pruning, from about 3 November 2026**
+10. Delete a recipe now, on either device, and sync both. Thirty days on, the
+    next sync should report "Cleared out … deletes", and the recipe's file
+    should be in Drive's trash rather than in `RecipeApp/recipes`. A list
+    item deleted now should likewise be gone from its file.
+
 ## Known gaps, deliberately left
 
 Recorded so no session has to rediscover them:
 
-- **Tombstones are never pruned.** Deleted records and list items accumulate
-  forever (chunk 6).
-- **`archived` is filtered in the UI but never set.** Nothing can archive a
-  list yet (chunk 6).
-- **`manifest.json` is in the data layout and the schema, but nothing reads or
-  writes it.** Either write it on sync or drop it (chunk 6).
+- **A device that does not sync for over 30 days can bring deletes back.**
+  Pruning assumes every device syncs within `KEEP_DELETES_DAYS`. One that
+  does not keeps showing records deleted elsewhere, and a list item deleted
+  elsewhere comes back on its next sync. A record comes back only if that
+  device edits it.
+- **A deleted list item that reaches storage more than 30 days after it was
+  deleted is pruned at once.** Items have no timestamp from storage, so their
+  age is the age of the delete. Deleted records do not have this problem.
+  It takes a device holding an unsynced delete for a month.
 - **`LocalFolderAdapter` is unbuilt**, deferred once the Import screen covered
   bulk import.
 - **The sync watermark is the newest `modifiedTime` seen.** A file written

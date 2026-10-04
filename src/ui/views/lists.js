@@ -4,7 +4,8 @@ import { groupItems, newList } from '../../core/list.js';
 import { h } from '../dom.js';
 
 /**
- * All shopping lists, newest first.
+ * All shopping lists, newest first. Archived ones wait, folded away, at the
+ * bottom.
  *
  * @typedef {import('../../core/types.js').ShoppingList} ShoppingList
  * @param {{ db: IDBDatabase, navigate: (hash: string) => void }} ctx
@@ -12,9 +13,9 @@ import { h } from '../dom.js';
  */
 export async function render(ctx) {
   /** @type {ShoppingList[]} */
-  const lists = (await listRecords(ctx.db, 'list'))
-    .filter((l) => !l.archived)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const all = (await listRecords(ctx.db, 'list')).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const lists = all.filter((l) => !l.archived);
+  const archived = all.filter((l) => l.archived);
 
   const create = h(
     'button',
@@ -38,14 +39,45 @@ export async function render(ctx) {
     h('span', { class: 'muted' }, ': the quick-add buttons on every list'),
   );
 
+  /** @param {ShoppingList} list */
+  function card(list) {
+    const rows = groupItems(list.items);
+    const left = rows.filter((r) => !r.checked).length;
+    const summary = rows.length === 0 ? 'Empty' : left === 0 ? 'All done' : `${left} to get · ${rows.length - left} in the cart`;
+    return h(
+      'li',
+      null,
+      h(
+        'a',
+        { class: 'card', href: `#/list/${encodeURIComponent(list.id)}` },
+        h('span', { class: 'card-title' }, list.name),
+        h('span', { class: 'card-meta' }, summary),
+      ),
+    );
+  }
+
+  const shelf = archived.length
+    ? h(
+        'details',
+        { class: 'archived' },
+        h('summary', null, `Archived lists (${archived.length})`),
+        h('ul', { class: 'recipe-list' }, archived.map(card)),
+      )
+    : null;
+
   if (lists.length === 0) {
     return h(
       'section',
-      { class: 'empty' },
-      h('h1', null, 'No shopping lists yet'),
-      h('p', null, 'Start one here, or add a recipe to a list from its page.'),
-      create,
-      commonItems,
+      null,
+      h(
+        'div',
+        { class: 'empty' },
+        h('h1', null, archived.length ? 'No open shopping lists' : 'No shopping lists yet'),
+        h('p', null, 'Start one here, or add a recipe to a list from its page.'),
+        create,
+        commonItems,
+      ),
+      shelf,
     );
   }
 
@@ -53,25 +85,8 @@ export async function render(ctx) {
     'section',
     null,
     h('div', { class: 'page-head' }, h('h1', null, 'Shopping lists'), create),
-    h(
-      'ul',
-      { class: 'recipe-list' },
-      lists.map((list) => {
-        const rows = groupItems(list.items);
-        const left = rows.filter((r) => !r.checked).length;
-        const summary = rows.length === 0 ? 'Empty' : left === 0 ? 'All done' : `${left} to get · ${rows.length - left} in the cart`;
-        return h(
-          'li',
-          null,
-          h(
-            'a',
-            { class: 'card', href: `#/list/${encodeURIComponent(list.id)}` },
-            h('span', { class: 'card-title' }, list.name),
-            h('span', { class: 'card-meta' }, summary),
-          ),
-        );
-      }),
-    ),
+    h('ul', { class: 'recipe-list' }, lists.map(card)),
+    shelf,
     commonItems,
   );
 }

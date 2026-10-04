@@ -155,7 +155,7 @@ export function pathFor(type, id) {
 
 /**
  * The inverse of pathFor. Returns null for paths the working copy does not
- * mirror - manifest.json, images/ - so sync can skip them without a special
+ * mirror - images/, or anything else - so sync can skip them without a special
  * case at every call site.
  *
  * @param {string} path

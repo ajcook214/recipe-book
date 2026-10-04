@@ -41,6 +41,7 @@ const SHELL = [
   'src/adapters/drive.js',
   'src/app.js',
   'src/config.js',
+  'src/core/backup.js',
   'src/core/db.js',
   'src/core/errors.js',
   'src/core/list.js',

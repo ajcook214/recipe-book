@@ -1,7 +1,14 @@
 # Record schemas
 
 `schemaVersion` is `1` for everything below. Every top-level record carries
-`id`, `updatedAt` (ISO 8601, UTC) and `deleted`.
+`id`, `updatedAt` (ISO 8601, UTC) and `deleted`. Each file carries its own
+`schemaVersion`, so there is no folder-wide manifest.
+
+`deleted: true` is a tombstone, kept so the delete reaches every device.
+Sync clears tombstones out after 30 days: a deleted recipe or list once it
+was deleted that long ago and its file has held the tombstone that long, and
+a deleted list item or catalog entry once it was deleted that long ago. A
+pruned file goes to Drive's trash.
 
 The `id` is also the file name, so it is made to be read:
 
@@ -28,15 +35,6 @@ The `id` is also the file name, so it is made to be read:
   or `null` for bare counts.
 - **`sort`** — sparse integers (100, 200, 300) so items can be reordered by
   writing one value instead of renumbering the array.
-
-## `manifest.json`
-
-```jsonc
-{
-  "schemaVersion": 1,
-  "lastModified": "2026-09-20T17:04:00.000Z"
-}
-```
 
 ## `recipes/<id>.json`
 
@@ -91,7 +89,7 @@ Scaling multiplies `qty` by `target / servings` for every ingredient where
   "deleted": false,
 
   "name": "Week of Sep 21",
-  "archived": false,
+  "archived": false,                  // put away: folded at the bottom of Lists, kept
 
   "items": [
     {
@@ -170,3 +168,24 @@ only, so lines already on a list still match it, and typing either the new
 name or the old one finds it. That is the one place a key can stop matching
 its own name. Deleting an entry forgets it: adding the item to a list again
 starts it over, unpinned and at one use.
+
+## Backups
+
+Not a file in Drive: the one file the Import screen downloads, holding
+everything on that device. The records are exactly as stored, less the
+tombstones and deleted items, which only matter to sync.
+
+```jsonc
+{
+  "format": "recipe-book-backup",     // how the Import screen knows it
+  "schemaVersion": 1,                 // of this wrapper
+  "exportedAt": "2026-10-04T12:00:00.000Z",
+  "recipes": [ /* recipes/<id>.json, sorted by id */ ],
+  "lists": [ /* lists/<id>.json, archived ones too */ ],
+  "catalog": { /* catalog.json */ }   // or null
+}
+```
+
+Importing one asks first, then takes each record through the ordinary import:
+recipes come back as the backup has them, and lists and the catalog merge
+with what is there.

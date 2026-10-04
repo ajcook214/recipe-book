@@ -18,23 +18,34 @@
 
 import {
   countDirty,
+  forget,
   getEnvelope,
   getMeta,
   idOf,
   listDirty,
+  listEnvelopes,
   markSynced,
   pathFor,
   saveFromSync,
   setMeta,
   typeForPath,
 } from './db.js';
-import { isSame, mergeCatalog, mergeList, mergeRecipe } from './merge.js';
+import { isPrunable, isSame, mergeCatalog, mergeList, mergeRecipe, pruneItems } from './merge.js';
 import { isAuthError, isNotFound, isVersionConflict, messageOf } from './errors.js';
 
 export const LAST_SYNC_KEY = 'lastSync';
 
 /** Meta key for the SyncRun of the last pass that reached storage. */
 export const LAST_RUN_KEY = 'lastRun';
+
+/**
+ * How long a delete is kept before it is dropped. Every device has to pull a
+ * tombstone before it goes, or one still holding the record brings it back,
+ * so this is how long a device can go without syncing and still hear about
+ * a delete. It matches Drive's trash, where a dropped file then waits as long
+ * again.
+ */
+export const KEEP_DELETES_DAYS = 30;
 
 /** @type {Record<RecordType, (local: any, remote: any) => any>} */
 const MERGERS = {
@@ -45,7 +56,7 @@ const MERGERS = {
 
 /**
  * @typedef {object} SyncError
- * @property {'list'|'pull'|'push'} phase
+ * @property {'list'|'pull'|'push'|'prune'} phase
  * @property {string} path
  * @property {string} message
  */
@@ -55,6 +66,8 @@ const MERGERS = {
  * @property {number} pulled     Remote files merged into the working copy.
  * @property {number} pushed     Local records written to storage.
  * @property {number} skipped    Remote files the working copy does not mirror.
+ * @property {number} pruned     Old tombstones dropped: whole records, and
+ *                               items on lists and in the catalog.
  * @property {string[]} conflicts        Paths where a push lost the version
  *                                       check and had to be re-merged.
  * @property {SyncError[]} errors
@@ -138,6 +151,84 @@ async function resolveConflict(db, adapter, env, syncedAt) {
 }
 
 /**
+ * Drop tombstones every device has had time to hear about, so deletes do not
+ * pile up for ever. Only records with nothing waiting to be pushed are
+ * touched: everything in them has reached storage.
+ *
+ * - A deleted recipe or list goes once it was deleted before the cutoff and
+ *   its file has held the tombstone since before it too. That second time is
+ *   storage's, so a delete pushed late still gets its full margin. The file
+ *   is trashed only if storage still has the version this copy last saw; a
+ *   file changed since, and somehow not pulled, is left alone.
+ * - Deleted items on a list or in the catalog go once deleted before the
+ *   cutoff. The record is saved without them, marked to push, and goes out
+ *   with this pass. If storage moved on meanwhile, the push conflicts and
+ *   re-merges as any other would.
+ *
+ * @param {IDBDatabase} db
+ * @param {any} adapter
+ * @param {number} cutoff  ms since the epoch
+ * @param {SyncResult} result
+ * @returns {Promise<void>}
+ */
+async function prune(db, adapter, cutoff, result) {
+  /** @type {Envelope[]} */
+  const gone = [];
+
+  for (const type of /** @type {RecordType[]} */ (['recipe', 'list', 'catalog'])) {
+    for (const env of await listEnvelopes(db, type)) {
+      if (env.dirty) continue;
+
+      if (env.record?.deleted === true) {
+        const stored = env.remoteModifiedTime ? Date.parse(env.remoteModifiedTime) : NaN;
+        if (isPrunable(env.record, cutoff) && stored < cutoff) gone.push(env);
+        continue;
+      }
+
+      if (type === 'recipe' || !Array.isArray(env.record?.items)) continue;
+      const pruned = pruneItems(env.record, cutoff);
+      if (pruned === env.record) continue;
+      result.pruned += env.record.items.length - pruned.items.length;
+      await saveFromSync(db, type, pruned, {
+        version: env.version,
+        modifiedTime: env.remoteModifiedTime,
+        syncedAt: env.syncedAt,
+        dirty: 1,
+      });
+    }
+  }
+
+  if (!gone.length) return;
+
+  // The pull listed only what changed since the watermark. Before trashing
+  // anything, look at everything storage has.
+  /** @type {Map<string, string>} */
+  let versions;
+  try {
+    /** @type {Array<{ path: string, version: string }>} */
+    const everything = await adapter.list('', {});
+    versions = new Map(everything.map((e) => [e.path, e.version]));
+  } catch (err) {
+    if (isAuthError(err)) throw err;
+    result.errors.push({ phase: 'prune', path: '', message: messageOf(err) });
+    return;
+  }
+
+  for (const env of gone) {
+    const version = versions.get(env.path);
+    if (version !== undefined && version !== env.version) continue;
+    try {
+      await adapter.remove(env.path);
+      await forget(db, env.path);
+      result.pruned += 1;
+    } catch (err) {
+      if (isAuthError(err)) throw err;
+      result.errors.push({ phase: 'prune', path: env.path, message: messageOf(err) });
+    }
+  }
+}
+
+/**
  * Run one sync pass.
  *
  * Rejects with an AuthError when storage refuses the sign-in part way
@@ -148,6 +239,9 @@ async function resolveConflict(db, adapter, env, syncedAt) {
  *
  * A pass that reaches storage is recorded under LAST_RUN_KEY, whatever it
  * found. One that cannot list, or is refused, is not.
+ *
+ * Between pulling and pushing, deletes older than KEEP_DELETES_DAYS are
+ * dropped (see prune), here and in storage.
  *
  * @param {IDBDatabase} db
  * @param {any} adapter
@@ -163,11 +257,14 @@ export async function sync(db, adapter, options = {}) {
     pulled: 0,
     pushed: 0,
     skipped: 0,
+    pruned: 0,
     conflicts: [],
     errors: [],
     lastSync: null,
     dirtyRemaining: 0,
   };
+
+  const cutoff = Date.parse(syncedAt) - KEEP_DELETES_DAYS * 24 * 60 * 60 * 1000;
 
   /** @type {string|null} */
   const previous = (await getMeta(db, LAST_SYNC_KEY)) ?? null;
@@ -195,7 +292,7 @@ export async function sync(db, adapter, options = {}) {
   for (const entry of entries) {
     const type = typeForPath(entry.path);
     if (!type) {
-      // manifest.json, images/, anything else the working copy does not mirror.
+      // images/, or anything else the working copy does not mirror.
       result.skipped += 1;
       continue;
     }
@@ -205,10 +302,21 @@ export async function sync(db, adapter, options = {}) {
       assertPathMatchesRecord(type, remoteRecord, entry.path);
 
       const local = await getEnvelope(db, entry.path);
-      const merged = MERGERS[type](local?.record ?? null, remoteRecord);
+      let merged = MERGERS[type](local?.record ?? null, remoteRecord);
       if (merged === null) {
         result.skipped += 1;
         continue;
+      }
+
+      // Another device may have pruned old tombstones from this file. Merging
+      // would hand ours back to it, and its next prune would take them out
+      // again, for ever. So they go here too, when this copy has nothing
+      // waiting to be pushed: then every tombstone in either copy has
+      // already reached storage.
+      if (type !== 'recipe' && !local?.dirty && merged.deleted !== true && Array.isArray(merged.items)) {
+        const pruned = pruneItems(merged, cutoff);
+        result.pruned += merged.items.length - pruned.items.length;
+        merged = pruned;
       }
 
       // If the merge produced exactly what storage holds, we are in sync.
@@ -233,7 +341,13 @@ export async function sync(db, adapter, options = {}) {
     }
   }
 
-  // --- 2. Push -------------------------------------------------------------
+  // --- 2. Prune ------------------------------------------------------------
+
+  // Not after a failed pull: this copy may then be behind storage, and a
+  // file is only trashed when it is known to hold the tombstone we have.
+  if (!pullFailed) await prune(db, adapter, cutoff, result);
+
+  // --- 3. Push -------------------------------------------------------------
 
   for (const env of await listDirty(db)) {
     try {
@@ -268,7 +382,7 @@ export async function sync(db, adapter, options = {}) {
     }
   }
 
-  // --- 3. Record the watermark, and the pass -------------------------------
+  // --- 4. Record the watermark, and the pass -------------------------------
 
   // A file that failed to pull has to be listed again next time, and a newer
   // file pulled or pushed in this pass may have carried the watermark past

@@ -9,6 +9,8 @@ import {
   mergeRecipe,
   mergeList,
   mergeCatalog,
+  isPrunable,
+  pruneItems,
 } from '../src/core/merge.js';
 
 // Tests are deliberately flat (no nested t.test / subtests) so this same file
@@ -382,4 +384,41 @@ test('mergeCatalog handles a catalog present on only one side', () => {
   assert.deepEqual(mergeCatalog(null, only), only);
   assert.deepEqual(mergeCatalog(only, undefined), only);
   assert.equal(mergeCatalog(null, null), null);
+});
+
+// --- pruning tombstones ----------------------------------------------------
+
+const CUTOFF = Date.parse(T2);
+
+test('a tombstone older than the cutoff is prunable; a recent or live one is not', () => {
+  assert.equal(isPrunable(item({ deleted: true, updatedAt: T1 }), CUTOFF), true);
+  assert.equal(isPrunable(item({ deleted: true, updatedAt: T3 }), CUTOFF), false, 'too recent');
+  assert.equal(isPrunable(item({ deleted: false, updatedAt: T1 }), CUTOFF), false, 'old but live');
+  assert.equal(isPrunable(item({ deleted: true, updatedAt: 'garbage' }), CUTOFF), true, 'a corrupt time counts as oldest');
+});
+
+test('pruning drops only old item tombstones', () => {
+  const pruned = pruneItems(
+    list([
+      item({ id: 'old-gone', deleted: true, updatedAt: T1 }),
+      item({ id: 'new-gone', deleted: true, updatedAt: T3 }),
+      item({ id: 'old-live', updatedAt: T1 }),
+    ]),
+    CUTOFF,
+  );
+  assert.deepEqual(pruned.items.map((i) => i.id), ['new-gone', 'old-live']);
+  assert.equal(pruned.updatedAt, T1, 'dropping tombstones is not an edit');
+});
+
+test('pruning hands back the same record when there is nothing to drop', () => {
+  const nothing = catalog([catItem(), catItem({ key: 'milk', deleted: true, updatedAt: T3 })]);
+  assert.equal(pruneItems(nothing, CUTOFF), nothing);
+});
+
+test('a pruned list merges with an unpruned copy back to the tombstone', () => {
+  // Why sync prunes merged copies too: merging alone hands the tombstone back.
+  const full = list([item({ id: 'a' }), item({ id: 'b', deleted: true, updatedAt: T1 })]);
+  const pruned = pruneItems(full, CUTOFF);
+  assert.equal(mergeList(pruned, full)?.items.length, 2);
+  assert.deepEqual(pruneItems(/** @type {any} */ (mergeList(pruned, full)), CUTOFF), pruned);
 });

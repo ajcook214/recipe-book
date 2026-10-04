@@ -3,7 +3,7 @@ import { createDriveAdapter } from '../../adapters/drive.js';
 import { DEV_DRIVE_FOLDER, DRIVE_FOLDER } from '../../config.js';
 import { changes, countDirty, getEnvelope, getMeta } from '../../core/db.js';
 import { isAuthError, messageOf } from '../../core/errors.js';
-import { LAST_RUN_KEY, sync } from '../../core/sync.js';
+import { KEEP_DELETES_DAYS, LAST_RUN_KEY, sync } from '../../core/sync.js';
 import { forgetToken, getToken, isReady, loadGoogle, signIn, signedInUntil } from '../auth.js';
 import { h } from '../dom.js';
 
@@ -250,6 +250,8 @@ async function reportView(db, run) {
     h('h2', null, `Last synced ${dayAndTime(run.at)}`),
     h('p', null, `${sent}; ${received}.`),
     merged.length ? h('p', null, `Also changed elsewhere during the sync, and merged: ${merged.join(', ')}.`) : null,
+    // Runs stored before pruning existed have no count.
+    run.pruned ? h('p', null, `Cleared out ${plural(run.pruned, 'delete')} older than ${KEEP_DELETES_DAYS} days.`) : null,
     failures.length
       ? [
           h('p', { class: 'sync-trouble' }, `${plural(failures.length, 'file')} did not sync, and will be tried again next time:`),

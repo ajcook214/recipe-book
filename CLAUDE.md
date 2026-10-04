@@ -11,14 +11,14 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 149 Node tests
+npm test         # 159 Node tests
 npm run typecheck
 ```
 
 Node lives at `C:\Program Files\nodejs`; if `npm` is not found, prepend that to
 `PATH` for the call.
 
-The other 52 tests need a browser (IndexedDB) and skip under Node. Run them at
+The other 59 tests need a browser (IndexedDB) and skip under Node. Run them at
 <http://localhost:8123/test/browser/>. Both suites should be green before and
 after a session. The adapter contract against real Google Drive is at
 <http://localhost:8123/test/drive/>; it needs the owner's sign-in, so it is run
@@ -26,6 +26,9 @@ by hand when `src/adapters/drive.js` changes.
 
 Sample data is in `local-data/` (gitignored): five recipes in `import/`, a
 shopping list and a catalog in `shopping/`. Load them from the Import screen.
+For a copy of the real data, download a backup on Pages (Import → Download a
+backup), keep it in `local-data/`, and import it on localhost; localhost
+syncs only with `RecipeApp-dev`.
 
 ## Goals & constraints
 
@@ -66,7 +69,6 @@ interface StorageAdapter {
 
 ```
 RecipeApp/
-  manifest.json          { schemaVersion, lastModified }
   recipes/<id>.json      one file per recipe: recipes/tomato-soup.json
   lists/<id>.json        one file per shopping list: lists/2026-09-30-143205.json
   catalog.json           the common-items catalog (single file)
@@ -78,7 +80,9 @@ RecipeApp/
   the file name, so it is readable: a recipe's is its title as a slug, fixed
   once it exists, and titles are unique by slug; a list's is when it was made.
   List item ids are UUIDs. Details in [docs/schema.md](docs/schema.md).
-- `schemaVersion` is a hook for future migrations.
+- Every file carries its own `schemaVersion`, the hook for future migrations.
+  There is no `manifest.json`: it was planned, but nothing ever needed it, and
+  a version per file migrates one file at a time, hand edits included.
 
 ## Sync algorithm
 
@@ -89,6 +93,8 @@ RecipeApp/
    the most likely conflict in this app, and record-level LWW would discard one side.
 3. Push dirty local records, checking the remote file `version` before writing so a newer remote change isn't clobbered. (On Drive the version is the file's `headRevisionId`; see `src/adapters/drive.js`.)
 4. Propagate deletes as tombstones rather than removing files immediately.
+   Tombstones are pruned on sync after 30 days (`KEEP_DELETES_DAYS` in
+   `src/core/sync.js`): long enough for every device to have heard of them.
 5. The UI shows the pending (dirty) change count and the last sync time.
 
 ## Known gotchas
@@ -196,8 +202,9 @@ of salt.
   Pages, and `sw.js` makes it open with no signal. Sign-in and the Sync screen
   work against real Drive, and the phone and the desktop sync through it.
   localhost syncs with `RecipeApp-dev`, and only Pages with the real
-  `RecipeApp`. Lists can be edited and reordered, and the catalog has its
-  own screen. What's left in the [roadmap](docs/roadmap.md) (chunk 6) is
-  polish.
+  `RecipeApp`. Lists can be edited, reordered and archived, the catalog has
+  its own screen, backups download from the Import screen, and sync prunes
+  deletes after 30 days. Every chunk in the [roadmap](docs/roadmap.md) is
+  done; its **Still to check by hand** list is what remains of v1.
 
 Recipe editing and creation is **after v1**, not part of the MVP.

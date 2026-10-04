@@ -252,6 +252,23 @@ export async function render(ctx, [id]) {
     h('a', { href: '#/catalog' }, 'Common items'),
   );
 
+  const archivedNote = h(
+    'div',
+    { class: 'archived-note', hidden: true },
+    h('span', null, 'Archived. Recipes are not added to it any more.'),
+    h(
+      'button',
+      {
+        type: 'button',
+        onclick: async () => {
+          await save(/** @type {ShoppingList} */ (list).items, { archived: false });
+          ctx.flash('Back with your lists');
+        },
+      },
+      'Unarchive',
+    ),
+  );
+
   const quick = h('div', { class: 'chips quick-add' });
   const toGet = h('ul', { class: 'shop-list' });
   const cart = h('section', { class: 'cart' });
@@ -329,6 +346,7 @@ export async function render(ctx, [id]) {
 
     editToggle.textContent = editing ? 'Done' : 'Edit';
     editHint.hidden = !editing;
+    archivedNote.hidden = !current.archived;
     // Anything already on the list, in the cart or not, is not worth offering.
     const onList = new Set(rows.map((r) => r.key));
 
@@ -413,6 +431,22 @@ export async function render(ctx, [id]) {
             'Clear checked items',
           )
         : null,
+      // Last week's list is put away rather than deleted. It is kept, and
+      // can come back; nothing to confirm.
+      current.archived
+        ? null
+        : h(
+            'button',
+            {
+              type: 'button',
+              onclick: async () => {
+                await save(/** @type {ShoppingList} */ (list).items, { archived: true });
+                ctx.flash(`Archived "${current.name}"`);
+                ctx.navigate('#/lists');
+              },
+            },
+            'Archive list',
+          ),
       h(
         'button',
         {
@@ -437,6 +471,7 @@ export async function render(ctx, [id]) {
     { class: 'shopping' },
     h('a', { class: 'back', href: '#/lists' }, '← Lists'),
     h('div', { class: 'page-head' }, name, editToggle),
+    archivedNote,
     addForm,
     quick,
     editHint,
