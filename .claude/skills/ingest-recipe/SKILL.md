@@ -57,9 +57,11 @@ node tools/ingest.js archive [file...]       # move imported files to local-data
    run wrote. Every entry is stamped with the oldest possible time, so
    importing it only adds what is missing. It never changes a common item
    the app already has, whether renamed, pinned or deleted. Read the labels
-   it prints. A name with capitals of its own needs fixing in the file
-   ("Yukon gold potatoes" → "Yukon Gold potatoes"), and a later run keeps
-   the fix.
+   it prints. A label reads as on a shopping list, so fix any that do not:
+   capitals of its own ("Yukon gold potatoes" → "Yukon Gold potatoes"), or
+   the plural a list would use ("Lime" → "Limes"). The app finds an item by
+   its label or its key, so "lime" and "limes" both find it. A later run
+   keeps your fixes.
 
 6. **Check**: `node tools/ingest.js check`. Fix every `fix:` line and run it
    again until it passes. It fails while a recipe ingredient is missing from
@@ -165,7 +167,10 @@ small nuisance, but a wrong merge is a wrong purchase.
 - Drop only what never changes what gets bought: size, prep, and singular
   versus plural. "Large egg" and "2 eggs" are both `eggs`, and "1 onion,
   finely diced" is `onion`. For singular or plural, reuse whichever form is
-  already known. `check` notes a mismatch.
+  already known. `check` notes a mismatch. A key no one has used yet is
+  singular for things counted one at a time (`lime`, `avocado`,
+  `bell-pepper`), and plural for things bought by the bag, bunch or pack
+  (`potatoes`, `strawberries`, `chicken-thighs`).
 - Merge different words only when they are synonyms for the same product,
   like scallions and green onions. Then reuse the known key. Two things a
   cook could substitute for each other are still two things: `garlic-powder`

@@ -89,8 +89,16 @@ export function looksAlike(a, b) {
   if (a === b) return false;
   const one = (/** @type {string} */ k) => k.replace(/(es|s)$/, '');
   if (one(a) === one(b)) return true;
-  const max = Math.min(a.length, b.length) > 6 ? 2 : 1;
-  return distance(a, b, max) <= max;
+  // Word by word, so "coconut-milk" and "coconut-oil" are two things, and
+  // "paper-towls" is a typo of "paper-towels".
+  const wa = a.split('-');
+  const wb = b.split('-');
+  if (wa.length !== wb.length) return false;
+  const differ = wa.map((w, i) => [w, wb[i] ?? '']).filter(([x, y]) => x !== y);
+  const [x = '', y = ''] = differ.length === 1 ? differ[0] ?? [] : [];
+  if (!x || !y) return false;
+  const max = Math.min(x.length, y.length) > 6 ? 2 : 1;
+  return distance(x, y, max) <= max;
 }
 
 /**

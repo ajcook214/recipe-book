@@ -73,8 +73,9 @@ node tools/ingest.js archive                      # after the import
      only, so the lines already on lists still match it.
 
    Keys follow **Choosing the key** in the `ingest-recipe` skill: as precise
-   as the item, merged only with true synonyms, and the owner's settled
-   answers apply.
+   as the item, merged only with true synonyms, singular or plural as that
+   section says, and the owner's settled answers apply. A label reads as on
+   a shopping list: "Limes" for the key `lime`, so typing either finds it.
 
 5. **Write**: `node tools/common-items.js write`. It compares the copy with
    the backup and writes `common-items-review-<time>.json` to the inbox: the

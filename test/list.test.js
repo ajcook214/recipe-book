@@ -13,6 +13,7 @@ import {
   newList,
   nextSort,
   normalizeList,
+  quickAdd,
   rankCatalog,
   SORT_STEP,
   sortsForMove,
@@ -136,6 +137,11 @@ const catalogOf = (items) => ({ schemaVersion: 1, updatedAt: 'T', items });
 test('the catalog ranks pinned first, then by use', () => {
   const ranked = rankCatalog(catalogOf([entry('a', 9), entry('b', 1, true), entry('c', 20), { ...entry('d', 99), deleted: true }]));
   assert.deepEqual(ranked.map((c) => c.key), ['b', 'c', 'a']);
+});
+
+test('quick-add offers pinned and used entries, never ones only waiting in the suggestions', () => {
+  const catalog = catalogOf([entry('apples', 0), entry('milk', 2), entry('eggs', 0, true), entry('bread', 5)]);
+  assert.deepEqual(quickAdd(catalog, new Set(['bread'])).map((c) => c.key), ['eggs', 'milk']);
 });
 
 test('a use of a common item counts, and stamps it so the count wins a merge', () => {

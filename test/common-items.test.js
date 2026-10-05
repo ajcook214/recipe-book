@@ -117,8 +117,11 @@ test('plurals and small typos look alike; different things do not', () => {
   assert.equal(looksAlike('egg', 'eggs'), true);
   assert.equal(looksAlike('bananna', 'bananas'), true);
   assert.equal(looksAlike('tomato', 'tomatoes'), true);
+  assert.equal(looksAlike('paper-towls', 'paper-towels'), true);
   assert.equal(looksAlike('onion', 'red-onion'), false);
   assert.equal(looksAlike('salt', 'salmon'), false);
+  assert.equal(looksAlike('coconut-milk', 'coconut-oil'), false);
+  assert.equal(looksAlike('soy-sauce', 'hot-sauce'), false);
 });
 
 test('the review finds what is bought but not common, typos, and what to pin', () => {

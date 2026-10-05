@@ -169,6 +169,8 @@ of file:
   (`tools/ingest.js additions`). Each is stamped `1970-01-01T00:00:00.000Z`,
   older than any real edit. The per-entry merge therefore adds a missing
   entry and never changes one that exists, deleted ones included.
+- **A starter list** of common shopping items, made once, stamped the same
+  way.
 - **A review of the lists** (`tools/common-items.js`): the whole catalog
   from a backup, after edits. Unchanged entries keep their own time, changed
   ones are stamped now, and removed ones become deletes stamped now.

@@ -18,7 +18,7 @@ passing the adapter contract against real Google Drive, Google sign-in
 lists and the catalog (`src/ui/views/catalog.js`), backups
 (`src/core/backup.js`), pruning old deletes on sync, and archiving lists.
 
-241 tests: 182 run under `npm test`, and 59 need a browser (IndexedDB), so they
+242 tests: 183 run under `npm test`, and 59 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
@@ -153,6 +153,8 @@ accident in a fresh session, and each one exists for a reason.
   import, in two kinds of file. Recipe ingredients are stamped at the epoch
   (`NEVER` in `tools/ingest.js`), so they only fill gaps in the per-entry
   merge. A review of the lists comes from the `common-items` skill.
+  Quick-add buttons offer only entries pinned or added before
+  (`quickAdd`); the rest wait among the suggestions.
 - **Every destructive action confirms first**, and says what will happen.
 
 **Tests**
@@ -613,6 +615,9 @@ and time. Strike each out here once it has been seen to work.
 13. The first review: download a backup, run the `common-items` skill,
     import its file on Pages, and sync the phone. Every change its summary
     listed should be there.
+14. After the starter list is imported on Pages: the quick-add buttons
+    still show only pinned items and ones added before. Typing "lim" on the
+    phone suggests Limes.
 
 ## Known gaps, deliberately left
 

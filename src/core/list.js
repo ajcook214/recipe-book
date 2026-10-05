@@ -264,6 +264,23 @@ export function rankCatalog(catalog) {
 }
 
 /**
+ * The quick-add buttons: what you usually buy, minus what is already on the
+ * list. Only entries pinned or added before. Recipe ingredients and starter
+ * items join at no uses, and would otherwise fill the buttons in alphabetical
+ * order; they wait among the suggestions until first added.
+ *
+ * @param {import('./types.js').Catalog|undefined|null} catalog
+ * @param {ReadonlySet<string>} onList  keys already on the list
+ * @param {number} [limit]
+ * @returns {CatalogItem[]}
+ */
+export function quickAdd(catalog, onList, limit = 10) {
+  return rankCatalog(catalog)
+    .filter((c) => (c.pinned || c.useCount > 0) && !onList.has(c.key))
+    .slice(0, limit);
+}
+
+/**
  * The catalog entry a typed name means, if any. A rename changes an entry's
  * label and keeps its key, so it answers to both: "Kitchen roll", renamed
  * from "Paper towels", is found by either name, and the lines already on a

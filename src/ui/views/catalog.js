@@ -156,7 +156,7 @@ export async function render(ctx) {
     h(
       'p',
       { class: 'muted' },
-      'A list offers these as quick-add buttons: pinned ones first, then the ones you add most. Tap one to rename it or give it a unit.',
+      'A list suggests all of these as you type, and offers the pinned ones and the ones you add most as quick-add buttons. Tap one to rename it or give it a unit.',
     ),
     filter,
     rows,

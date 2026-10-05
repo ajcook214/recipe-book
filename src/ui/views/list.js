@@ -6,6 +6,7 @@ import {
   groupItems,
   newItem,
   nextSort,
+  quickAdd,
   rankCatalog,
   sortsForMove,
 } from '../../core/list.js';
@@ -351,15 +352,13 @@ export async function render(ctx, [id]) {
     // Anything already on the list, in the cart or not, is not worth offering.
     const onList = new Set(rows.map((r) => r.key));
 
-    // Catalog chips: what you usually buy, minus what is already on the list.
-    const ranked = rankCatalog(catalog);
     quick.replaceChildren(
-      ...ranked
-        .filter((c) => !onList.has(c.key))
-        .slice(0, 10)
-        .map((c) => h('button', { type: 'button', class: 'chip', onclick: () => add(c.label) }, `+ ${c.label}`)),
+      ...quickAdd(catalog, onList).map((c) =>
+        h('button', { type: 'button', class: 'chip', onclick: () => add(c.label) }, `+ ${c.label}`),
+      ),
     );
-    suggestions.replaceChildren(...ranked.map((c) => h('option', { value: c.label })));
+    // Suggestions offer every common item, used or not.
+    suggestions.replaceChildren(...rankCatalog(catalog).map((c) => h('option', { value: c.label })));
 
     toGet.replaceChildren(
       ...(open.length
