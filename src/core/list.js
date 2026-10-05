@@ -226,38 +226,24 @@ export function sortsForMove(rows, index) {
 // --- catalog ---------------------------------------------------------------
 
 /**
- * Record a use of a catalog item, creating it when new. This is how the
- * catalog fills itself: whatever you actually add drifts to the top.
+ * Record a use of a catalog entry, so what you actually add drifts to the
+ * top. Only an entry that exists counts. Adding something new to a list never
+ * creates one, or a typo or a one-off purchase would be remembered for good;
+ * entries arrive by import instead, from recipes and from reviewing lists
+ * (docs/schema.md). A deleted entry stays deleted.
  *
- * A deleted entry starts over, unpinned and at one use. Deleting one is how
- * it is forgotten, so it should not come back as it was.
- *
- * @param {import('./types.js').Catalog|undefined|null} catalog
- * @param {{ key: string, label: string, defaultUnit?: string|null }} entry
+ * @param {import('./types.js').Catalog} catalog
+ * @param {string} key
  * @param {string} now
- * @returns {import('./types.js').Catalog}
+ * @returns {import('./types.js').Catalog}  the catalog as it was when nothing has that key
  */
-export function touchCatalog(catalog, entry, now) {
-  const items = [...(catalog?.items ?? [])];
-  const i = items.findIndex((c) => c.key === entry.key);
-  const existing = i >= 0 && !items[i]?.deleted ? items[i] : undefined;
-
-  const next = existing
-    ? { ...existing, useCount: existing.useCount + 1, lastUsedAt: now, deleted: false, updatedAt: now }
-    : {
-        key: entry.key,
-        label: entry.label,
-        defaultUnit: entry.defaultUnit ?? null,
-        useCount: 1,
-        lastUsedAt: now,
-        pinned: false,
-        deleted: false,
-        updatedAt: now,
-      };
-
-  if (i >= 0) items[i] = next;
-  else items.push(next);
-  return { schemaVersion: 1, updatedAt: now, items };
+export function countUse(catalog, key, now) {
+  const i = catalog.items.findIndex((c) => c.key === key && !c.deleted);
+  const existing = catalog.items[i];
+  if (!existing) return catalog;
+  const items = [...catalog.items];
+  items[i] = { ...existing, useCount: existing.useCount + 1, lastUsedAt: now, updatedAt: now };
+  return { ...catalog, updatedAt: now, items };
 }
 
 /**

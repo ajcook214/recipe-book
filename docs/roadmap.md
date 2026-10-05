@@ -18,7 +18,7 @@ passing the adapter contract against real Google Drive, Google sign-in
 lists and the catalog (`src/ui/views/catalog.js`), backups
 (`src/core/backup.js`), pruning old deletes on sync, and archiving lists.
 
-231 tests: 172 run under `npm test`, and 59 need a browser (IndexedDB), so they
+241 tests: 182 run under `npm test`, and 59 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
@@ -147,6 +147,12 @@ accident in a fresh session, and each one exists for a reason.
   name or its old one. A name another entry answers to is refused. A list
   item renamed in the app does take the new name's key, so a fixed typo
   combines with the real thing.
+- **Typing on a list never creates a common item.** It counts a use of the
+  one it matches (`countUse`). Anything else stays on the list only, so a
+  typo or a one-off is not remembered for good. Common items arrive by
+  import, in two kinds of file. Recipe ingredients are stamped at the epoch
+  (`NEVER` in `tools/ingest.js`), so they only fill gaps in the per-entry
+  merge. A review of the lists comes from the `common-items` skill.
 - **Every destructive action confirms first**, and says what will happen.
 
 **Tests**
@@ -179,8 +185,9 @@ accident in a fresh session, and each one exists for a reason.
   `local-data/` (gitignored): five recipes in `import/`, a shopping list and a
   catalog in `shopping/`. Load them from the Import screen.
 - **New recipes come in through the `ingest-recipe` skill**, never by hand
-  into Drive. Its files wait in `local-data/inbox/` until the owner imports
-  them on Pages, then move to `local-data/imported/`
+  into Drive. Its files wait in `local-data/inbox/`, with a common-items
+  file for their ingredients, until the owner imports them on Pages. Then
+  they move to `local-data/imported/`
   (`node tools/ingest.js archive`).
 - Commit at the end of a chunk with everything green, and say plainly what was
   verified and what was not.
@@ -595,6 +602,17 @@ and time. Strike each out here once it has been seen to work.
     next sync should report "Cleared out … deletes", and the recipe's file
     should be in Drive's trash rather than in `RecipeApp/recipes`. A list
     item deleted now should likewise be gone from its file.
+
+**Common items**
+11. Ingest a recipe and import its files on Pages, the common-items file
+    included. Lists → Common items should show its ingredients at no uses.
+    A common item that was already pinned or renamed should be as it was.
+12. On the phone, add something that is not a common item to a list, and
+    add a common item. After syncing, the common item's count has gone up,
+    and the other never appears under Common items.
+13. The first review: download a backup, run the `common-items` skill,
+    import its file on Pages, and sync the phone. Every change its summary
+    listed should be there.
 
 ## Known gaps, deliberately left
 

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  countUse,
   editCatalogEntry,
   findCatalogEntry,
   groupItems,
@@ -15,7 +16,6 @@ import {
   rankCatalog,
   SORT_STEP,
   sortsForMove,
-  touchCatalog,
 } from '../src/core/list.js';
 import { combineAmount } from '../src/core/units.js';
 
@@ -126,15 +126,6 @@ test('a row is only checked when every line behind it is', () => {
 
 // --- catalog ---------------------------------------------------------------
 
-test('touching the catalog creates an entry, then bumps it', () => {
-  const once = touchCatalog(undefined, { key: 'milk', label: 'Milk' }, 'T1');
-  assert.equal(once.items[0]?.useCount, 1);
-  const twice = touchCatalog(once, { key: 'milk', label: 'Milk' }, 'T2');
-  assert.equal(twice.items.length, 1);
-  assert.equal(twice.items[0]?.useCount, 2);
-  assert.equal(twice.items[0]?.lastUsedAt, 'T2');
-});
-
 /** @param {string} key @param {number} useCount @param {boolean} [pinned] @param {string} [label] */
 const entry = (key, useCount, pinned = false, label = key) => ({
   key, label, defaultUnit: null, useCount, lastUsedAt: null, pinned, deleted: false, updatedAt: 'T',
@@ -147,13 +138,21 @@ test('the catalog ranks pinned first, then by use', () => {
   assert.deepEqual(ranked.map((c) => c.key), ['b', 'c', 'a']);
 });
 
-test('a deleted catalog entry added again starts over', () => {
-  const gone = { ...entry('milk', 14, true, 'Milk'), defaultUnit: 'gallon', deleted: true };
-  const back = touchCatalog(catalogOf([gone]), { key: 'milk', label: 'milk' }, 'T2');
-  assert.equal(back.items.length, 1, 'the same entry, not a second one');
-  assert.deepEqual(back.items[0], {
-    key: 'milk', label: 'milk', defaultUnit: null, useCount: 1, lastUsedAt: 'T2', pinned: false, deleted: false, updatedAt: 'T2',
+test('a use of a common item counts, and stamps it so the count wins a merge', () => {
+  const once = countUse(catalogOf([entry('milk', 3, true, 'Milk')]), 'milk', 'T2');
+  assert.deepEqual(once.items[0], {
+    key: 'milk', label: 'Milk', defaultUnit: null, useCount: 4, lastUsedAt: 'T2', pinned: true, deleted: false, updatedAt: 'T2',
   });
+});
+
+test('adding something that is not a common item never creates one', () => {
+  const catalog = catalogOf([entry('milk', 3)]);
+  assert.equal(countUse(catalog, 'bananna', 'T2'), catalog, 'unchanged, so nothing is saved');
+});
+
+test('a deleted common item stays deleted when its name is added to a list', () => {
+  const catalog = catalogOf([{ ...entry('milk', 14), deleted: true }]);
+  assert.equal(countUse(catalog, 'milk', 'T2'), catalog);
 });
 
 test('a renamed catalog entry answers to its new name and its old key', () => {

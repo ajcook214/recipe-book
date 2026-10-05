@@ -2,7 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { checkRecipe, cleanUrl, findRecipes, trimRecipe } from '../tools/ingest.js';
+import { normalizeCatalog } from '../src/core/list.js';
+import { mergeCatalog } from '../src/core/merge.js';
+import { NEVER, checkCatalog, checkRecipe, cleanUrl, findRecipes, recipeAdditions, trimRecipe } from '../tools/ingest.js';
 
 /*
  * The ingest-recipe skill's helpers. Node only (tools/ingest.js reads the
@@ -150,4 +152,50 @@ test('notes a new key that looks like a known one', () => {
   const known = { ...nothingKnown, catalog: new Map([['eggs', 'Eggs']]) };
   const egg = file({ ingredients: [{ qty: 2, unit: null, item: 'egg', key: 'egg', note: null, scalable: true }] });
   assert.match(checkRecipe(egg, known).notes.join('\n'), /"egg" is new, but "eggs" is known/);
+});
+
+// --- common items from recipes ---------------------------------------------------
+
+test('every recipe ingredient becomes a common item that only fills a gap', () => {
+  const additions = recipeAdditions(
+    [
+      file({ ingredients: [{ key: 'yellow-onion' }, { key: 'salt' }] }),
+      file({ ingredients: [{ key: 'salt' }, { key: 'yukon-gold-potatoes' }] }),
+    ],
+    new Map([['yukon-gold-potatoes', 'Yukon Gold potatoes']]),
+  );
+  assert.deepEqual(
+    additions.items.map((c) => [c.key, c.label, c.useCount, c.updatedAt]),
+    [
+      ['salt', 'Salt', 0, NEVER],
+      ['yellow-onion', 'Yellow onion', 0, NEVER],
+      ['yukon-gold-potatoes', 'Yukon Gold potatoes', 0, NEVER],
+    ],
+  );
+});
+
+test('importing them never changes a common item the app already has', () => {
+  const at = '2026-09-30T12:00:00.000Z';
+  /** @param {string} key @param {Partial<any>} over */
+  const entry = (key, over) => ({
+    key, label: key, defaultUnit: null, useCount: 5, lastUsedAt: at, pinned: false, deleted: false, updatedAt: at, ...over,
+  });
+  const app = {
+    schemaVersion: 1,
+    updatedAt: at,
+    items: [entry('paper-towels', { label: 'Kitchen roll', pinned: true }), entry('salt', { deleted: true })],
+  };
+  const additions = recipeAdditions([file({ ingredients: [{ key: 'paper-towels' }, { key: 'salt' }, { key: 'onion' }] })]);
+  // Through normalizeCatalog, as the Import screen reads a file.
+  const merged = mergeCatalog(app, normalizeCatalog(JSON.parse(JSON.stringify(additions))).catalog);
+  const find = (/** @type {string} */ key) => merged?.items.find((c) => c.key === key);
+
+  assert.deepEqual(find('paper-towels'), app.items[0], 'renamed and pinned, as it was');
+  assert.deepEqual(find('salt'), app.items[1], 'deleted, as it was');
+  assert.equal(find('onion')?.updatedAt, NEVER, 'the missing one is added');
+});
+
+test('a common-items file that would win every merge by accident is refused', () => {
+  const { errors } = checkCatalog({ items: [{ key: 'milk', label: 'Milk' }] });
+  assert.match(errors.join('\n'), /no updatedAt/);
 });

@@ -159,15 +159,26 @@ entry on `key`.
 }
 ```
 
-The catalog self-populates: adding a free-form item to a list creates or bumps
-a catalog entry for its key, so the things you actually buy drift to the top
-without any curation.
+Adding an item to a list counts a use of the entry it matches, by label or
+key, so the things you actually buy drift to the top. Something with no entry
+goes on the list only. Typing never creates an entry, so a typo or a one-off
+purchase is not remembered for good. Entries arrive by import, in two kinds
+of file:
+
+- **Recipe ingredients**, one entry per key, imported with each recipe
+  (`tools/ingest.js additions`). Each is stamped `1970-01-01T00:00:00.000Z`,
+  older than any real edit. The per-entry merge therefore adds a missing
+  entry and never changes one that exists, deleted ones included.
+- **A review of the lists** (`tools/common-items.js`): the whole catalog
+  from a backup, after edits. Unchanged entries keep their own time, changed
+  ones are stamped now, and removed ones become deletes stamped now.
 
 `key` never changes once an entry exists. Renaming one changes its `label`
 only, so lines already on a list still match it, and typing either the new
 name or the old one finds it. That is the one place a key can stop matching
-its own name. Deleting an entry forgets it: adding the item to a list again
-starts it over, unpinned and at one use.
+its own name. Deleting an entry forgets it: adding the item to a list puts
+it on the list only. A recipe that uses it brings it back only after the
+delete has been pruned, 30 days on.
 
 ## Backups
 

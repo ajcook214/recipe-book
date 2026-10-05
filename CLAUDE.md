@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 172 Node tests
+npm test         # 182 Node tests
 npm run typecheck
 ```
 
@@ -172,6 +172,25 @@ checks each file with the app's own `normalizeRecipe`.
 Later, for independence: an in-app JSON-LD importer could handle most sites
 deterministically, with no LLM involved. `findRecipes` and `trimRecipe` in
 `tools/ingest.js` are a start.
+
+## Common items (settled)
+
+The catalog is what a list suggests as you type and offers as quick-add
+buttons. **Typing on a list never adds to it**; it only counts a use of an
+entry that exists. Entries arrive by import:
+
+- **Every recipe ingredient**, through the `ingest-recipe` skill, in a file
+  stamped so it only fills gaps.
+- **Things bought by hand that are worth keeping**, through the
+  `common-items` skill
+  ([.claude/skills/common-items/SKILL.md](.claude/skills/common-items/SKILL.md)).
+  It reviews the lists in a backup with the owner, then writes the whole
+  catalog back, stamped for the per-entry merge.
+
+Bulk changes go through Import, never by overwriting the file in Drive.
+Sync merges entry by entry either way, and Import reports what it did. The
+catalog is not kept in the repo: it is shopping history, and the repo is
+public. Dated backups in `local-data/backups/` are its history.
 
 ## Record schemas (settled)
 

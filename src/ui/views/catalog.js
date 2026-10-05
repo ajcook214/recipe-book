@@ -6,8 +6,10 @@ import { slugify } from '../../core/recipe.js';
 import { editDialog, field, h, nowIso } from '../dom.js';
 
 /**
- * The common items: what a list offers as quick-add buttons. The catalog
- * fills itself from what gets added to lists; this is where it is tidied.
+ * The common items: what a list offers as quick-add buttons and suggests as
+ * you type. Entries arrive by import, from recipes and from reviewing lists
+ * with Claude, and adding one to a list counts a use; this is where they are
+ * tidied.
  * Shown in the order the buttons are, so what you see here is what a list
  * offers first.
  *
@@ -138,7 +140,7 @@ export async function render(ctx) {
             h(
               'li',
               { class: 'muted empty-row' },
-              all.length ? 'Nothing matches.' : 'Nothing yet. Whatever you add to a list by hand is remembered here.',
+              all.length ? 'Nothing matches.' : 'Nothing yet. Common items arrive by import, with recipes or from a review of your lists.',
             ),
           ]),
     );

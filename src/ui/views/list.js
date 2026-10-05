@@ -1,13 +1,13 @@
 // @ts-check
 import { getRecord, saveLocal } from '../../core/db.js';
 import {
+  countUse,
   findCatalogEntry,
   groupItems,
   newItem,
   nextSort,
   rankCatalog,
   sortsForMove,
-  touchCatalog,
 } from '../../core/list.js';
 import { COMMON_UNITS, formatQty, normalizeUnit, parseQty } from '../../core/quantity.js';
 import { slugify } from '../../core/recipe.js';
@@ -160,7 +160,8 @@ export async function render(ctx, [id]) {
   }
 
   /**
-   * Add from the catalog or free-form text; either way the catalog learns it.
+   * Add from the catalog or free-form text. A common item counts the use;
+   * anything else is added to the list only, never to the common items.
    *
    * Everything is read and changed in memory before the first await. Two
    * adds can overlap, from two quick taps on the buttons, and one that read
@@ -183,9 +184,9 @@ export async function render(ctx, [id]) {
       sort: nextSort(current.items),
     });
 
-    if (key) catalog = touchCatalog(catalog, { key, label, defaultUnit: entry?.defaultUnit ?? null }, nowIso());
+    if (entry && catalog) catalog = countUse(catalog, entry.key, nowIso());
     const saving = save([...current.items, item]);
-    if (key) await saveLocal(ctx.db, 'catalog', catalog);
+    if (entry && catalog) await saveLocal(ctx.db, 'catalog', catalog);
     await saving;
   }
 
