@@ -8,16 +8,21 @@ import {
   findCatalogEntry,
   groupItems,
   itemsFromRecipe,
+  labelFor,
   listIdFor,
+  NEVER,
   newItem,
   newList,
   nextSort,
   normalizeList,
   quickAdd,
   rankCatalog,
+  recipeAdditions,
   SORT_STEP,
   sortsForMove,
+  withRecipeItems,
 } from '../src/core/list.js';
+import { mergeCatalog } from '../src/core/merge.js';
 import { combineAmount } from '../src/core/units.js';
 
 let n = 0;
@@ -183,6 +188,70 @@ test('editing a catalog entry stamps it and keeps its key', () => {
   assert.deepEqual(next.items[0], { ...entry('paper-towels', 3, true, 'Kitchen roll'), updatedAt: 'T2' });
   assert.equal(next.items[1], catalog.items[1], 'the others are untouched, so they lose no merge');
   assert.equal(next.updatedAt, 'T2');
+});
+
+// --- common items from recipes ---------------------------------------------
+
+/** @param {Array<[string, string]>} pairs  [item, key] */
+const recipeWith = (pairs) => ({
+  ...recipe,
+  ingredients: pairs.map(([item, key]) => ({ qty: 1, unit: null, item, key, note: null, scalable: true })),
+});
+
+test('importing a recipe adds its missing ingredients as common items that only fill a gap', () => {
+  const catalog = catalogOf([entry('salt', 7, false, 'Salt')]);
+  const { catalog: next, added } = withRecipeItems(
+    catalog,
+    recipeWith([['large onion', 'onion'], ['kosher salt', 'salt'], ['Yukon Gold potatoes', 'yukon-gold-potatoes'], ['onion', 'onion']]),
+    'T2',
+  );
+  assert.deepEqual(
+    added.map((c) => [c.key, c.label, c.useCount, c.pinned, c.updatedAt]),
+    [
+      ['onion', 'Onion', 0, false, NEVER],
+      ['yukon-gold-potatoes', 'Yukon Gold potatoes', 0, false, NEVER],
+    ],
+    'labelled from the item only when it names the key, so "large onion" is not a common item',
+  );
+  assert.equal(next.items[0], catalog.items[0], 'salt as it was');
+  assert.equal(next.items.length, 3);
+  assert.equal(next.updatedAt, 'T2', 'the catalog is saved, to push');
+});
+
+test('importing a recipe never changes a common item that exists, renamed, pinned or deleted', () => {
+  const towels = entry('paper-towels', 3, true, 'Kitchen roll');
+  const salt = { ...entry('salt', 9, false, 'Salt'), deleted: true };
+  const scallions = entry('scallions', 2, false, 'Green onions');
+  const catalog = catalogOf([towels, salt, scallions]);
+  const { catalog: next, added } = withRecipeItems(
+    catalog,
+    recipeWith([['paper towels', 'paper-towels'], ['salt', 'salt'], ['green onions', 'green-onions'], ['milk', 'milk']]),
+    'T2',
+  );
+  assert.deepEqual(added.map((c) => c.key), ['milk'], 'green-onions would answer to the same name as the renamed scallions');
+  assert.deepEqual(next.items.slice(0, 3), [towels, salt, scallions]);
+});
+
+test('a recipe with nothing new to add changes nothing, so nothing is saved', () => {
+  const catalog = catalogOf([entry('milk', 1)]);
+  const out = withRecipeItems(catalog, recipeWith([['milk', 'milk']]), 'T2');
+  assert.deepEqual(out.added, []);
+  assert.equal(out.catalog, catalog);
+});
+
+test("a common item a recipe added loses to another device's copy on sync", () => {
+  const { catalog: here } = withRecipeItems(null, recipeWith([['onion', 'onion'], ['milk', 'milk']]), '2026-10-04T00:00:00.000Z');
+  const gone = { ...entry('onion', 4, false, 'Onions'), deleted: true, updatedAt: '2026-09-01T00:00:00.000Z' };
+  const there = { schemaVersion: 1, updatedAt: '2026-09-01T00:00:00.000Z', items: [gone] };
+  const merged = mergeCatalog(here, there);
+  assert.deepEqual(merged?.items.find((c) => c.key === 'onion'), gone, 'deleted there, so it stays deleted');
+  assert.equal(merged?.items.find((c) => c.key === 'milk')?.updatedAt, NEVER, 'the one only here is kept');
+});
+
+test('a review keeps a label already settled over the guess', () => {
+  const additions = recipeAdditions([recipeWith([['yukon gold potatoes', 'yukon-gold-potatoes']])], new Map([['yukon-gold-potatoes', 'Yukon Gold potatoes']]));
+  assert.deepEqual(additions.items.map((c) => c.label), ['Yukon Gold potatoes']);
+  assert.equal(labelFor('yukon-gold-potatoes', 'yukon gold potatoes'), 'Yukon gold potatoes');
 });
 
 // --- moving rows -----------------------------------------------------------

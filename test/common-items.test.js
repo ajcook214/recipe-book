@@ -2,10 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeCatalog } from '../src/core/list.js';
+import { NEVER, normalizeCatalog } from '../src/core/list.js';
 import { mergeCatalog } from '../src/core/merge.js';
 import { looksAlike, reviewOf, stampReview } from '../tools/common-items.js';
-import { NEVER } from '../tools/ingest.js';
 
 /*
  * The common-items skill's review. Node only (tools/ reads the file

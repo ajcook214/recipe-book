@@ -27,20 +27,10 @@ import { pathToFileURL } from 'node:url';
 
 import { isBackup } from '../src/core/backup.js';
 import { messageOf } from '../src/core/errors.js';
+import { NEVER, recipeAdditions } from '../src/core/list.js';
 import { normalizeUnit } from '../src/core/quantity.js';
 import { slugify } from '../src/core/recipe.js';
-import {
-  DATA,
-  INBOX,
-  NEVER,
-  REVIEW,
-  ROOT,
-  checkCatalog,
-  jsonFiles,
-  labelClashes,
-  recipeAdditions,
-  stampFor,
-} from './ingest.js';
+import { DATA, INBOX, REVIEW, ROOT, checkCatalog, jsonFiles, labelClashes, stampFor } from './ingest.js';
 
 /** @typedef {import('../src/core/types.js').CatalogItem} CatalogItem */
 

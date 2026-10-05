@@ -6,11 +6,11 @@ description: Turn a recipe web page (a URL, or a saved HTML file) into a recipe 
 # Ingest a recipe
 
 You turn a recipe page into a file matching `docs/schema.md`, check it with the
-app's own validator, and leave it in `local-data/inbox/`. Beside it goes a
-common-items file, because every recipe ingredient is a common item: that is
-what the add box suggests and the quick-add buttons offer. The owner imports
-both on Pages and syncs. You never write to Drive: under the `drive.file` scope the
-app cannot see files it did not create.
+app's own validator, and leave it in `local-data/inbox/`. The owner imports
+it on Pages and syncs. Import also adds each ingredient the common items
+lack, because every recipe ingredient is a common item: that is what the add
+box suggests. You never write to Drive: under the `drive.file` scope the app
+cannot see files it did not create.
 
 The repo is public. Recipe files live only in `local-data/` (gitignored).
 Never commit them, and never put recipe data anywhere else in the repo.
@@ -22,7 +22,6 @@ Run the helper with Node (`C:\Program Files\nodejs`; prepend it to `PATH` if
 node tools/ingest.js fetch <url|file.html>   # the page's schema.org Recipe, trimmed
 node tools/ingest.js vocab                   # tags, keys and units already in use
 node tools/ingest.js check                   # lint everything in local-data/inbox/
-node tools/ingest.js additions               # the common items for the inbox's recipes
 node tools/ingest.js archive [file...]       # move imported files to local-data/imported/
 ```
 
@@ -51,45 +50,37 @@ node tools/ingest.js archive [file...]       # move imported files to local-data
 
 4. **Write `local-data/inbox/<id>.json`**, by the rules below.
 
-5. **Add the common items**: `node tools/ingest.js additions`. It writes
-   `common-items-from-recipes-<time>.json` to the inbox, one entry for every
-   ingredient key in the inbox's recipes, and replaces the file an earlier
-   run wrote. Every entry is stamped with the oldest possible time, so
-   importing it only adds what is missing. It never changes a common item
-   the app already has, whether renamed, pinned or deleted. Read the labels
-   it prints. A label reads as on a shopping list, so fix any that do not:
-   capitals of its own ("Yukon gold potatoes" → "Yukon Gold potatoes"), or
-   the plural a list would use ("Lime" → "Limes"). The app finds an item by
-   its label or its key, so "lime" and "limes" both find it. A later run
-   keeps your fixes.
+5. **Check**: `node tools/ingest.js check`. Fix every `fix:` line and run it
+   again until it passes. Read each `note:` and act on the ones that matter.
+   A new key that looks like a known one is a question for **Choosing the
+   key**, not an answer, and a new tag should be one you meant.
 
-6. **Check**: `node tools/ingest.js check`. Fix every `fix:` line and run it
-   again until it passes. It fails while a recipe ingredient is missing from
-   the common-items file, so run step 5 again after changing a recipe's keys.
-   Read each `note:` and act on the ones that matter. A new key that looks
-   like a known one is a question for **Choosing the key**, not an answer,
-   and a new tag should be one you meant.
+   The `new common items` note shows the label Import will give each one:
+   the ingredient's `item` when it names the key exactly, otherwise the key
+   ("large onion" → "Onion"). A label reads as on a shopping list, so a name
+   with capitals of its own needs them in the `item` ("Yukon Gold
+   potatoes"). Import never changes a common item the app already has,
+   whether renamed, pinned or deleted, so a new label is a first guess the
+   owner can rename under Common items.
 
-7. **Report** briefly, for each recipe: title, servings, tags, and anything the
+6. **Report** briefly, for each recipe: title, servings, tags, and anything the
    owner should know: a clash Import will ask about, a meal-kit swap, a key
    merged into a known one or kept apart from it, or another judgement call.
    Then tell them how to import:
    1. Open <https://ajcook214.github.io/recipe-book/>, then Import →
-      Choose files…, and pick every file in
-      `C:\Users\kille\Documents\recipe-book\local-data\inbox\`: the recipes
-      and the common-items file.
+      Choose files…, and pick the recipes in
+      `C:\Users\kille\Documents\recipe-book\local-data\inbox\`.
    2. Sync, so the phone gets them.
    3. Say when they are in, and you will archive them.
 
    localhost syncs only with `RecipeApp-dev`, so recipes meant to keep go in
    through Pages.
 
-8. **Archive** when the owner confirms: `node tools/ingest.js archive`.
+7. **Archive** when the owner confirms: `node tools/ingest.js archive`.
    Archived files still count for `vocab` and `check`, and a later re-ingest
    replaces the older copy there.
 
-Several recipes in one go: do steps 2–4 for each, then add the common items,
-check and report once.
+Several recipes in one go: do steps 2–4 for each, then check and report once.
 
 Anything else about the common items, such as adding things bought by hand,
 fixing typos or pinning, belongs to the `common-items` skill.
@@ -145,7 +136,8 @@ Every field is present, in this order:
   `cup`, `oz`, `lb`, `g`, `ml`, `clove`, `can`, `stalk`, `package`…), or
   `null` for a bare count. Only stored forms combine on a shopping list.
 - `item`: what the cook buys, as the page names it, without prep
-  ("large onion", "Yukon Gold potatoes").
+  ("large onion", "Yukon Gold potatoes"). Give a name its own capitals: a
+  new common item takes its label from here.
 - `key`: what the cook buys, as a slug. See **Choosing the key**.
 - `note`: prep and asides ("finely diced", "divided", "optional", "for the
   sauce"), or `null`.

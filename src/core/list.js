@@ -313,6 +313,81 @@ export function editCatalogEntry(catalog, key, changes, now) {
   return { schemaVersion: 1, updatedAt: now, items };
 }
 
+// --- common items from recipes ---------------------------------------------
+
+/**
+ * The time on a common item that only fills a gap. Older than any real edit,
+ * so in the per-entry merge an entry already on another device always wins,
+ * renamed, pinned, counted or deleted, and only a missing one is added.
+ */
+export const NEVER = new Date(0).toISOString();
+
+/**
+ * A new common item's label. The recipe's own wording when it names the key
+ * exactly, so "Yukon Gold potatoes" keeps its capitals; otherwise the key
+ * ("yellow-onion" -> "Yellow onion"), since "large onion" or "kosher salt"
+ * would name one recipe's ingredient, not what is bought.
+ *
+ * @param {string} key
+ * @param {string} [item]
+ * @returns {string}
+ */
+export function labelFor(key, item) {
+  const words = item && slugify(item) === key ? item.trim() : key.replace(/-+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * A common item for every ingredient of these recipes, stamped NEVER, so a
+ * merge adds the missing ones and leaves every entry that exists as it is.
+ *
+ * @param {readonly any[]} recipes
+ * @param {ReadonlyMap<string, string>} [labels]  key -> a label already settled, used before labelFor
+ * @returns {import('./types.js').Catalog}
+ */
+export function recipeAdditions(recipes, labels = new Map()) {
+  /** @type {Map<string, CatalogItem>} */
+  const items = new Map();
+  for (const recipe of recipes) {
+    for (const ing of recipe.ingredients ?? []) {
+      const key = ing?.key;
+      if (typeof key !== 'string' || key === '' || items.has(key)) continue;
+      items.set(key, {
+        key,
+        label: labels.get(key) ?? labelFor(key, typeof ing.item === 'string' ? ing.item : undefined),
+        defaultUnit: null,
+        useCount: 0,
+        lastUsedAt: null,
+        pinned: false,
+        deleted: false,
+        updatedAt: NEVER,
+      });
+    }
+  }
+  return { schemaVersion: 1, updatedAt: NEVER, items: [...items.values()].sort((a, b) => a.key.localeCompare(b.key)) };
+}
+
+/**
+ * Every recipe ingredient is a common item, so importing a recipe adds the
+ * ones the catalog lacks. An entry with the key stays as it is, deleted ones
+ * included, and so does one that answers to the key by a rename, so no two
+ * entries answer to one name. The new ones are stamped NEVER: if another
+ * device has the key, its copy wins on sync.
+ *
+ * @param {import('./types.js').Catalog|undefined|null} catalog
+ * @param {Recipe} recipe
+ * @param {string} now
+ * @returns {{ catalog: import('./types.js').Catalog, added: CatalogItem[] }}  nothing added: nothing to save
+ */
+export function withRecipeItems(catalog, recipe, now) {
+  const base = catalog ?? { schemaVersion: 1, updatedAt: now, items: [] };
+  const added = recipeAdditions([recipe]).items.filter(
+    (c) => !base.items.some((e) => e.key === c.key) && !findCatalogEntry(base, c.key),
+  );
+  if (added.length === 0) return { catalog: base, added };
+  return { catalog: { ...base, updatedAt: now, items: [...base.items, ...added] }, added };
+}
+
 // --- import validation -----------------------------------------------------
 
 /** @param {unknown} v @returns {string|null} */

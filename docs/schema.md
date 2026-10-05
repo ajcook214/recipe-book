@@ -162,13 +162,14 @@ entry on `key`.
 Adding an item to a list counts a use of the entry it matches, by label or
 key, so the things you actually buy drift to the top. Something with no entry
 goes on the list only. Typing never creates an entry, so a typo or a one-off
-purchase is not remembered for good. Entries arrive by import, in two kinds
-of file:
+purchase is not remembered for good. Entries arrive by import:
 
-- **Recipe ingredients**, one entry per key, imported with each recipe
-  (`tools/ingest.js additions`). Each is stamped `1970-01-01T00:00:00.000Z`,
-  older than any real edit. The per-entry merge therefore adds a missing
-  entry and never changes one that exists, deleted ones included.
+- **Recipe ingredients**, one entry per key, added when the recipe is
+  imported (`withRecipeItems` in `src/core/list.js`), unless an entry has
+  the key or answers to it, deleted ones included. Each is labelled from the
+  ingredient's `item` when that names the key, or else from the key, and
+  stamped `1970-01-01T00:00:00.000Z`, older than any real edit, so on sync
+  another device's copy of the entry wins.
 - **A starter list** of common shopping items, made once, stamped the same
   way.
 - **A review of the lists** (`tools/common-items.js`): the whole catalog

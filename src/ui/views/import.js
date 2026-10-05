@@ -2,7 +2,7 @@
 import { backupContents, backupFileName, isBackup, makeBackup } from '../../core/backup.js';
 import { getRecord, listRecords, saveLocal } from '../../core/db.js';
 import { messageOf } from '../../core/errors.js';
-import { normalizeCatalog, normalizeList } from '../../core/list.js';
+import { normalizeCatalog, normalizeList, withRecipeItems } from '../../core/list.js';
 import { isSame, mergeCatalog, mergeList } from '../../core/merge.js';
 import { keepBoth, normalizeRecipe, placeRecipe } from '../../core/recipe.js';
 import { ask, h, nowIso, sourceParts } from '../dom.js';
@@ -85,15 +85,19 @@ export async function render(ctx) {
       return;
     }
 
-    for (const record of [...recipes, ...lists, ...(catalog ? [catalog] : [])]) await importRecord(label, record);
+    // The backup's common items are the ones to have, so its recipes add none.
+    for (const record of [...recipes, ...lists, ...(catalog ? [catalog] : [])]) {
+      await importRecord(label, record, { restoring: true });
+    }
     report('ok', label, `Restored the backup from ${when}`);
   }
 
   /**
    * @param {string} label
    * @param {any} raw  one record
+   * @param {{ restoring?: boolean }} [options]
    */
-  async function importRecord(label, raw) {
+  async function importRecord(label, raw, { restoring = false } = {}) {
     const kind = kindOf(raw);
 
     if (kind === 'list') {
@@ -150,7 +154,8 @@ export async function render(ctx) {
         // Re-importing a re-summarized recipe must not wipe it.
         incoming = { ...recipe, rating: recipe.rating ?? place.existing.rating ?? null };
         if (sameContent(incoming, place.existing)) {
-          report('skip', label, `"${incoming.title}" is unchanged`, warnings, incoming.id);
+          const added = restoring ? [] : await addCommonItems(incoming);
+          report(added.length ? 'ok' : 'skip', label, `"${incoming.title}" is unchanged${andAdded(added)}`, warnings, incoming.id);
           return;
         }
       } else if (place.kind === 'clash') {
@@ -175,10 +180,24 @@ export async function render(ctx) {
       // last-writer-wins comparison against the file's original timestamp.
       incoming = { ...incoming, updatedAt: nowIso() };
       await saveLocal(ctx.db, 'recipe', incoming);
-      report('ok', label, `${verb} "${incoming.title}"`, warnings, incoming.id);
+      const added = restoring ? [] : await addCommonItems(incoming);
+      report('ok', label, `${verb} "${incoming.title}"${andAdded(added)}`, warnings, incoming.id);
     } catch (err) {
       report('error', label, messageOf(err));
     }
+  }
+
+  /**
+   * Every recipe ingredient is a common item: what a list suggests as you
+   * type. Adds the ones missing, and changes none that exist.
+   *
+   * @param {Recipe} recipe
+   * @returns {Promise<string[]>}  the labels added
+   */
+  async function addCommonItems(recipe) {
+    const { catalog, added } = withRecipeItems(await getRecord(ctx.db, 'catalog'), recipe, nowIso());
+    if (added.length > 0) await saveLocal(ctx.db, 'catalog', catalog);
+    return added.map((c) => c.label);
   }
 
   /** Everything on this device, as one file in the downloads folder. */
@@ -251,7 +270,7 @@ export async function render(ctx) {
     h(
       'p',
       { class: 'muted' },
-      'Recipe, shopping list or catalog JSON files, or a backup made below. A recipe imported again from the same source updates the one you have; another recipe with a name already here asks what to do. Lists and the catalog merge into the ones you have.',
+      'Recipe, shopping list or catalog JSON files, or a backup made below. A recipe imported again from the same source updates the one you have; another recipe with a name already here asks what to do. Recipe ingredients join the common items, if they are not there already. Lists and the catalog merge into the ones you have.',
     ),
     h('label', { class: 'button file-button' }, 'Choose files…', fileInput),
     h('h2', null, 'Or paste'),
@@ -286,6 +305,16 @@ export async function render(ctx) {
  */
 function plural(n, word) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * ", and 2 new common items: Lean ground beef, Elbow macaroni", or nothing.
+ *
+ * @param {string[]} labels
+ * @returns {string}
+ */
+function andAdded(labels) {
+  return labels.length ? `, and ${plural(labels.length, 'new common item')}: ${labels.join(', ')}` : '';
 }
 
 /**

@@ -18,7 +18,7 @@ passing the adapter contract against real Google Drive, Google sign-in
 lists and the catalog (`src/ui/views/catalog.js`), backups
 (`src/core/backup.js`), pruning old deletes on sync, and archiving lists.
 
-242 tests: 183 run under `npm test`, and 59 need a browser (IndexedDB), so they
+245 tests: 186 run under `npm test`, and 59 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
@@ -150,9 +150,11 @@ accident in a fresh session, and each one exists for a reason.
 - **Typing on a list never creates a common item.** It counts a use of the
   one it matches (`countUse`). Anything else stays on the list only, so a
   typo or a one-off is not remembered for good. Common items arrive by
-  import, in two kinds of file. Recipe ingredients are stamped at the epoch
-  (`NEVER` in `tools/ingest.js`), so they only fill gaps in the per-entry
-  merge. A review of the lists comes from the `common-items` skill.
+  import. Importing a recipe adds the ingredients the catalog lacks
+  (`withRecipeItems`), stamped at the epoch (`NEVER` in
+  `src/core/list.js`), so on sync any other device's copy wins. A backup's
+  recipes add none: its catalog is the one to restore. A review of the lists
+  comes from the `common-items` skill, as a file.
   Quick-add buttons offer only entries pinned or added before
   (`quickAdd`); the rest wait among the suggestions.
 - **Every destructive action confirms first**, and says what will happen.
@@ -187,9 +189,8 @@ accident in a fresh session, and each one exists for a reason.
   `local-data/` (gitignored): five recipes in `import/`, a shopping list and a
   catalog in `shopping/`. Load them from the Import screen.
 - **New recipes come in through the `ingest-recipe` skill**, never by hand
-  into Drive. Its files wait in `local-data/inbox/`, with a common-items
-  file for their ingredients, until the owner imports them on Pages. Then
-  they move to `local-data/imported/`
+  into Drive. Its files wait in `local-data/inbox/`, one per recipe, until
+  the owner imports them on Pages. Then they move to `local-data/imported/`
   (`node tools/ingest.js archive`).
 - Commit at the end of a chunk with everything green, and say plainly what was
   verified and what was not.
@@ -606,9 +607,10 @@ and time. Strike each out here once it has been seen to work.
     item deleted now should likewise be gone from its file.
 
 **Common items**
-11. Ingest a recipe and import its files on Pages, the common-items file
-    included. Lists → Common items should show its ingredients at no uses.
-    A common item that was already pinned or renamed should be as it was.
+11. Ingest a recipe and import its file on Pages. The result should name
+    the new common items, and Lists → Common items should show them at no
+    uses. A common item that was already pinned or renamed should be as it
+    was.
 12. On the phone, add something that is not a common item to a list, and
     add a common item. After syncing, the common item's count has gone up,
     and the other never appears under Common items.

@@ -6,7 +6,6 @@
  *   node tools/ingest.js fetch <url|file.html>  the page's schema.org Recipe, trimmed
  *   node tools/ingest.js vocab                  tags, keys and units already in use
  *   node tools/ingest.js check [file...]        lint the files waiting, by default the inbox
- *   node tools/ingest.js additions              a common item for every inbox recipe's ingredients
  *   node tools/ingest.js archive [file...]      move imported files out of the inbox
  *
  * New recipe files wait in local-data/inbox/ until they are imported, then
@@ -14,15 +13,17 @@
  * local-data/: the repo is public, and recipe data never goes in it.
  *
  * `check` runs each file through the app's own normalizeRecipe, so a file it
- * passes imports with no warnings.
+ * passes imports with no warnings. Its ingredients become common items when
+ * it is imported (withRecipeItems in src/core/list.js), so a recipe is one
+ * file.
  */
-import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { backupContents, isBackup } from '../src/core/backup.js';
 import { messageOf } from '../src/core/errors.js';
-import { normalizeCatalog } from '../src/core/list.js';
+import { NEVER, labelFor, normalizeCatalog } from '../src/core/list.js';
 import { normalizeUnit } from '../src/core/quantity.js';
 import { normalizeRecipe, placeRecipe, recipeIdFor, slugify } from '../src/core/recipe.js';
 
@@ -41,13 +42,6 @@ export const INBOX = path.join(DATA, 'inbox');
 const IMPORTED = path.join(DATA, 'imported');
 /** The common-items skill's working copy; never data in its own right. */
 export const REVIEW = path.join(DATA, 'review');
-
-/**
- * The time on a common item that only fills a gap. Older than any real edit,
- * so in the per-entry merge an entry already in the app always wins, renamed,
- * pinned, counted or deleted, and only a missing one is added.
- */
-export const NEVER = new Date(0).toISOString();
 
 /**
  * A file name's time, in local time to the second, so files made by later
@@ -473,57 +467,17 @@ export function checkRecipe(raw, known) {
     const near = [`${key}s`, `${key}es`, key.replace(/e?s$/, '')].find((k) => k !== key && knownKeys.has(k));
     if (near) notes.push(`key "${key}" is new, but "${near}" is known; the same thing?`);
   }
-  const fresh = [...new Set(recipe.ingredients.map((i) => i.key))].filter((k) => !known.catalog.has(k));
-  if (known.catalog.size > 0 && fresh.length > 0) notes.push(`new common items: ${fresh.join(', ')}`);
+  // Import adds these, labelled as shown. Capitals of their own go in the
+  // ingredient's item, which the label comes from when it names the key.
+  const fresh = recipe.ingredients.filter((i, n, all) => !known.catalog.has(i.key) && all.findIndex((j) => j.key === i.key) === n);
+  if (known.catalog.size > 0 && fresh.length > 0) {
+    notes.push(`new common items: ${fresh.map((i) => `${i.key} "${labelFor(i.key, i.item)}"`).join(', ')}`);
+  }
 
   return { errors, notes };
 }
 
 // --- common items --------------------------------------------------------------
-
-/**
- * "yellow-onion" -> "Yellow onion". A first guess at a common item's label;
- * a name with capitals of its own needs fixing by hand ("Yukon Gold").
- *
- * @param {string} key
- * @returns {string}
- */
-export function labelFor(key) {
-  const words = key.replace(/-+/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-/**
- * A common item for every ingredient of these recipes, to import with them,
- * so recipe ingredients are always common items. Each one is stamped NEVER,
- * so the import adds the missing ones and leaves every entry already in the
- * app as it is. Nothing here has to know what the app holds.
- *
- * @param {readonly any[]} recipes
- * @param {ReadonlyMap<string, string>} [labels]  key -> a label already settled, used before labelFor
- * @returns {import('../src/core/types.js').Catalog}
- */
-export function recipeAdditions(recipes, labels = new Map()) {
-  /** @type {Map<string, import('../src/core/types.js').CatalogItem>} */
-  const items = new Map();
-  for (const recipe of recipes) {
-    for (const ing of recipe.ingredients ?? []) {
-      const key = ing?.key;
-      if (typeof key !== 'string' || key === '' || items.has(key)) continue;
-      items.set(key, {
-        key,
-        label: labels.get(key) ?? labelFor(key),
-        defaultUnit: null,
-        useCount: 0,
-        lastUsedAt: null,
-        pinned: false,
-        deleted: false,
-        updatedAt: NEVER,
-      });
-    }
-  }
-  return { schemaVersion: 1, updatedAt: NEVER, items: [...items.values()].sort((a, b) => a.key.localeCompare(b.key)) };
-}
 
 /**
  * Live entries that would answer to the same name. The app finds a common
@@ -599,10 +553,6 @@ async function checkCommand(files) {
   const known = await loadKnown();
   /** @type {Map<string, string>} */
   const ids = new Map();
-  /** @type {Set<string>} */
-  const ingredientKeys = new Set();
-  /** @type {Set<string>} */
-  const addedKeys = new Set();
   let failed = 0;
 
   for (const file of targets) {
@@ -612,13 +562,7 @@ async function checkCommand(files) {
     let notes = [];
     try {
       const raw = JSON.parse(await readFile(file, 'utf8'));
-      if (Array.isArray(raw?.items)) {
-        ({ errors, notes } = checkCatalog(raw));
-        if (path.basename(file).startsWith(ADDITIONS)) for (const c of raw.items) addedKeys.add(c?.key);
-      } else {
-        ({ errors, notes } = checkRecipe(raw, known));
-        for (const ing of Array.isArray(raw?.ingredients) ? raw.ingredients : []) ingredientKeys.add(ing?.key);
-      }
+      ({ errors, notes } = Array.isArray(raw?.items) ? checkCatalog(raw) : checkRecipe(raw, known));
       if (typeof raw.id === 'string') {
         if (path.basename(file) !== `${raw.id}.json`) errors.push(`file should be named ${raw.id}.json`);
         if (ids.has(raw.id)) errors.push(`${ids.get(raw.id)} has the same id`);
@@ -633,54 +577,7 @@ async function checkCommand(files) {
     for (const n of notes) console.log(`  note: ${n}`);
   }
 
-  // Recipe ingredients are always common items, so the recipes in the inbox
-  // go nowhere without the file that adds them.
-  const missing = files.length > 0 ? [] : [...ingredientKeys].filter((k) => !addedKeys.has(k));
-  if (missing.length > 0) {
-    failed += 1;
-    console.log(`common items: ${missing.length} recipe ingredients not added yet; run node tools/ingest.js additions`);
-  }
   if (failed > 0) process.exitCode = 1;
-}
-
-// --- additions ---------------------------------------------------------------
-
-/** The start of the name of the file `additions` writes. */
-export const ADDITIONS = 'common-items-from-recipes-';
-
-/**
- * Writes the common items for every recipe in the inbox, replacing the file
- * an earlier run wrote. A label fixed by hand in that file is kept.
- */
-async function additionsCommand() {
-  const files = await jsonFiles(INBOX);
-  /** @type {any[]} */
-  const recipes = [];
-  const labels = new Map([...(await loadKnown()).catalog]);
-  for (const file of files) {
-    let raw;
-    try {
-      raw = JSON.parse(await readFile(file, 'utf8'));
-    } catch {
-      continue;
-    }
-    if (path.basename(file).startsWith(ADDITIONS)) {
-      for (const c of raw.items ?? []) if (typeof c?.key === 'string') labels.set(c.key, String(c.label));
-      await unlink(file);
-    } else if (Array.isArray(raw?.ingredients)) {
-      recipes.push(raw);
-    }
-  }
-  if (recipes.length === 0) {
-    console.log('No recipes in local-data/inbox/.');
-    return;
-  }
-  const catalog = recipeAdditions(recipes, labels);
-  const out = path.join(INBOX, `${ADDITIONS}${stampFor(new Date())}.json`);
-  await writeFile(out, `${JSON.stringify(catalog, null, 2)}
-`);
-  console.log(`wrote ${path.relative(ROOT, out)}: ${catalog.items.length} common items, each only filling a gap`);
-  for (const c of catalog.items) console.log(`  ${c.key}: "${c.label}"`);
 }
 
 // --- archive -----------------------------------------------------------------
@@ -708,9 +605,8 @@ async function main([command, ...rest]) {
   if (command === 'fetch') await fetchCommand(rest[0] ?? '');
   else if (command === 'vocab') await vocabCommand();
   else if (command === 'check') await checkCommand(rest);
-  else if (command === 'additions') await additionsCommand();
   else if (command === 'archive') await archiveCommand(rest);
-  else throw new Error('Usage: node tools/ingest.js fetch <url|file> | vocab | check [file...] | additions | archive [file...]');
+  else throw new Error('Usage: node tools/ingest.js fetch <url|file> | vocab | check [file...] | archive [file...]');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

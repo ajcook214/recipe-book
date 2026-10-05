@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 183 Node tests
+npm test         # 186 Node tests
 npm run typecheck
 ```
 
@@ -179,8 +179,9 @@ The catalog is what a list suggests as you type and offers as quick-add
 buttons. **Typing on a list never adds to it**; it only counts a use of an
 entry that exists. Entries arrive by import:
 
-- **Every recipe ingredient**, through the `ingest-recipe` skill, in a file
-  stamped so it only fills gaps.
+- **Every recipe ingredient**, added by the Import screen with the recipe
+  (`withRecipeItems` in `src/core/list.js`). Only missing ones are added,
+  stamped so they only fill gaps, so a recipe is one file to import.
 - **Things bought by hand that are worth keeping**, through the
   `common-items` skill
   ([.claude/skills/common-items/SKILL.md](.claude/skills/common-items/SKILL.md)).
