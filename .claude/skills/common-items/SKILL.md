@@ -8,8 +8,8 @@ description: Review and manage the recipe app's common items (the catalog behind
 The common items are what a shopping list suggests as you type and offers as
 quick-add buttons, pinned ones first, then the most added. They grow two
 ways:
-- **Recipe ingredients**, always. The `ingest-recipe` skill imports them with
-  every recipe.
+- **Recipe ingredients**, always. Importing a recipe adds the ones missing,
+  and changes none that exist.
 - **Things bought by hand that are worth keeping**, chosen in a review like
   this one.
 
