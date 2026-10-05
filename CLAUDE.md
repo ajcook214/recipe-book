@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 159 Node tests
+npm test         # 172 Node tests
 npm run typecheck
 ```
 
@@ -144,39 +144,34 @@ infrastructure.
 ## Recipe ingestion (settled)
 
 Claude is the primary ingestion engine. Given a recipe URL or saved HTML, it
-produces a recipe JSON file matching docs/schema.md, which the app loads via its
-Import screen (file picker or paste).
+writes a recipe JSON file matching docs/schema.md, and the owner loads it on
+the Import screen. **The how-to lives in the `ingest-recipe` skill**
+([.claude/skills/ingest-recipe/SKILL.md](.claude/skills/ingest-recipe/SKILL.md)):
+the writing rules (ingredients are structured facts; steps are summarized
+hard, written in Claude's own words, and carry no quantities), and
+`tools/ingest.js`, which fetches a page's schema.org `Recipe` JSON-LD and
+checks each file with the app's own `normalizeRecipe`.
 
 - **Go through the app, never straight into Drive.** Under the `drive.file`
   scope the app cannot see files it did not create, so a recipe written into
   Drive directly would be invisible. Imported records are pushed on next sync
   and the app creates the Drive files itself.
-- **Prefer the page's schema.org `Recipe` JSON-LD** when present; most recipe
-  sites embed it.
-- **Ingredients** are facts: structure them into qty/unit/item/key/note.
-- **Steps are rewritten in Claude's own words**, never copied, and carry **no
-  quantities** — amounts live only in ingredients, so scaling stays correct.
-  Refer to ingredients relatively ("half the zest"). The one exception is
-  something that is not an ingredient, like pasta water: give it **per
-  serving** ("about 1/4 cup per serving") so it still scales.
-- **Meal-kit units** (HelloFresh "1 unit stock concentrate") become something
-  buyable in a store, with a note saying what it replaces.
-- **Summarize hard.** Short, imperative steps a cook can follow at a glance.
-  Drop the life story, SEO filler, tips that restate the obvious, and
-  "about 1 cup" volume hints. Keep only what changes the outcome: times,
-  temperatures, pan sizes, doneness cues, and genuinely useful notes.
-- `source` records the original URL.
-- **`id` is the title as a slug** (`"Tomato Soup"` → `"tomato-soup"`, at most
-  60 characters, cut at a word break), because it becomes the file name.
+- **Files, not integrations.** New files wait in `local-data/inbox/`. The owner
+  imports them on Pages, and they move to `local-data/imported/`. Writing
+  through a Drive connector into an inbox the app opens with Google Picker
+  was considered and turned down: it needs an API key and a Picker setup, and
+  this public app should stay as simple as possible.
+- **`id` is the title as a slug**, because it becomes the file name.
   Re-ingesting a recipe from the same URL gives the same id, and importing it
   updates the one in the app and keeps its rating. Another recipe with a
   title already taken makes the Import screen ask: cancel, replace, or keep
   both.
-- Ingested files go in `/local-data/` (gitignored). **This repo is public:
-  never commit recipe data.**
+- **This repo is public: never commit recipe data.** Everything ingested
+  stays in `local-data/` (gitignored).
 
 Later, for independence: an in-app JSON-LD importer could handle most sites
-deterministically, with no LLM involved.
+deterministically, with no LLM involved. `findRecipes` and `trimRecipe` in
+`tools/ingest.js` are a start.
 
 ## Record schemas (settled)
 

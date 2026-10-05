@@ -18,7 +18,7 @@ passing the adapter contract against real Google Drive, Google sign-in
 lists and the catalog (`src/ui/views/catalog.js`), backups
 (`src/core/backup.js`), pruning old deletes on sync, and archiving lists.
 
-218 tests: 159 run under `npm test`, and 59 need a browser (IndexedDB), so they
+231 tests: 172 run under `npm test`, and 59 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
@@ -178,6 +178,10 @@ accident in a fresh session, and each one exists for a reason.
 - **Never commit recipe data.** The repo is public. Samples live in
   `local-data/` (gitignored): five recipes in `import/`, a shopping list and a
   catalog in `shopping/`. Load them from the Import screen.
+- **New recipes come in through the `ingest-recipe` skill**, never by hand
+  into Drive. Its files wait in `local-data/inbox/` until the owner imports
+  them on Pages, then move to `local-data/imported/`
+  (`node tools/ingest.js archive`).
 - Commit at the end of a chunk with everything green, and say plainly what was
   verified and what was not.
 
