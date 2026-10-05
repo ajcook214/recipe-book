@@ -35,7 +35,7 @@ import { DATA, INBOX, REVIEW, ROOT, checkCatalog, jsonFiles, labelClashes, stamp
 /** @typedef {import('../src/core/types.js').CatalogItem} CatalogItem */
 
 /** The fields of a common item a review can change. Its key never changes. */
-const FIELDS = /** @type {const} */ (['label', 'defaultUnit', 'useCount', 'lastUsedAt', 'pinned', 'deleted']);
+const FIELDS = /** @type {const} */ (['label', 'defaultUnit', 'useCount', 'lastUsedAt', 'pinned', 'onHand', 'deleted']);
 
 /** A list needs this many lists behind it before "on most lists" means anything. */
 const PIN_MIN_LISTS = 4;
@@ -145,7 +145,7 @@ export function reviewOf(backup) {
   const days = lists.map(listDay).filter(Boolean).sort();
   /** @type {string[]} */
   const report = [
-    `Common items: ${catalog.length}, ${catalog.filter((c) => c.pinned).length} pinned`,
+    `Common items: ${catalog.length}, ${catalog.filter((c) => c.pinned).length} pinned, ${catalog.filter((c) => c.onHand).length} on hand`,
     `Lists: ${lists.length}${days.length ? `, from ${days[0]} to ${days[days.length - 1]}` : ''}`,
     `Recipes: ${recipes.length}`,
   ];
@@ -242,6 +242,7 @@ export function stampReview(base, edited, now) {
         useCount: raw?.useCount ?? 0,
         lastUsedAt: raw?.lastUsedAt ?? null,
         pinned: raw?.pinned === true,
+        onHand: raw?.onHand === true,
         deleted: raw?.deleted === true,
         updatedAt: raw?.updatedAt === NEVER ? NEVER : now,
       });
@@ -254,7 +255,8 @@ export function stampReview(base, edited, now) {
     // A field left out of the copy is a field left alone.
     const next = { ...old };
     for (const f of FIELDS) if (raw?.[f] !== undefined) /** @type {any} */ (next)[f] = f === 'label' ? label : raw[f];
-    const diffs = FIELDS.filter((f) => next[f] !== old[f]);
+    // Entries from before onHand existed lack it, and missing means false.
+    const diffs = FIELDS.filter((f) => (f === 'onHand' ? Boolean(next[f]) !== Boolean(old[f]) : next[f] !== old[f]));
     if (diffs.length === 0) {
       items.push(old);
       unchanged += 1;

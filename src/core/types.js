@@ -75,6 +75,8 @@
  * @property {number} useCount          Drives "most used" ordering.
  * @property {string|null} lastUsedAt
  * @property {boolean} pinned
+ * @property {boolean} [onHand]         Usually in the kitchen (salt, water): a recipe's line for it
+ *                                      starts unticked when the recipe goes on a list. Missing is false.
  * @property {boolean} deleted
  * @property {string} updatedAt
  */

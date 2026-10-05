@@ -18,7 +18,7 @@ passing the adapter contract against real Google Drive, Google sign-in
 lists and the catalog (`src/ui/views/catalog.js`), backups
 (`src/core/backup.js`), pruning old deletes on sync, and archiving lists.
 
-245 tests: 186 run under `npm test`, and 59 need a browser (IndexedDB), so they
+248 tests: 189 run under `npm test`, and 59 need a browser (IndexedDB), so they
 skip in Node and run at <http://localhost:8123/test/browser/>. Both should be
 green before and after every session. The adapter contract also runs against
 real Drive at <http://localhost:8123/test/drive/>. That needs a Google sign-in,
@@ -157,6 +157,11 @@ accident in a fresh session, and each one exists for a reason.
   comes from the `common-items` skill, as a file.
   Quick-add buttons offer only entries pinned or added before
   (`quickAdd`); the rest wait among the suggestions.
+- **"On hand" belongs to the common item, not the recipe.** Salt is on hand
+  whichever recipe calls for it, so `onHand` is one flag per catalog entry,
+  set on the Common items screen. It only decides what starts ticked when a
+  recipe goes on a list (`isOnHand`): the ingredient stays in the recipe and
+  scales. Older entries lack the field, and missing means false.
 - **Every destructive action confirms first**, and says what will happen.
 
 **Tests**

@@ -124,7 +124,10 @@ checking the row checks every line behind it. When a row mixes units, weights
 from the list drops exactly the items whose `from.recipeId` matches.
 
 Adding a recipe to a list shows its ingredients with checkboxes, so pantry
-staples can be unticked before anything is stored.
+staples can be unticked before anything is stored. An ingredient whose
+common item is marked `onHand` (salt, water) starts unticked, listed last,
+so it is one tap away when it runs out. It stays in the recipe and scales
+like anything else.
 
 Deleted items are tombstoned in place (`deleted: true` on the item) until the
 list itself is pruned, so a delete on one device survives a merge with another.
@@ -152,12 +155,19 @@ entry on `key`.
       "useCount": 12,                 // drives "most used" ordering
       "lastUsedAt": "2026-09-14T…",
       "pinned": true,                 // always show near the top
+      "onHand": false,                // usually in the kitchen; missing means false
       "deleted": false,
       "updatedAt": "…"
     }
   ]
 }
 ```
+
+`onHand` marks what the kitchen usually has, like salt, pepper or water.
+It only changes what starts ticked when a recipe goes on a list
+(`isOnHand` in `src/core/list.js`). Typing it on a list, the suggestions
+and the quick-add buttons treat it like any other entry. Entries made
+before the field existed lack it.
 
 Adding an item to a list counts a use of the entry it matches, by label or
 key, so the things you actually buy drift to the top. Something with no entry

@@ -461,6 +461,19 @@ button.small { min-height: 34px; padding: 0 12px; font-size: 0.9rem; }
 .field > span:first-child { font-size: 0.9rem; font-weight: 600; }
 .field input { width: 100%; background: var(--bg); }
 .field-hint { color: var(--muted); font-size: 0.85rem; }
+.check-field {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-height: var(--tap);
+  margin-top: 12px;
+  cursor: pointer;
+}
+.check-field input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.check-field > span:first-of-type { font-weight: 600; font-size: 0.9rem; }
+.check-field .field-hint { grid-column: 2; }
 .edit-form fieldset { min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
 .edit-form legend { padding: 0; color: var(--muted); font-size: 0.9rem; }
 .edit-form fieldset .field { margin-top: 4px; }
@@ -492,3 +505,5 @@ button.small { min-height: 34px; padding: 0 12px; font-size: 0.9rem; }
   cursor: pointer;
 }
 .pick-list input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.pick-heading { margin: 16px 0 0; font-size: 0.9rem; font-weight: 600; }
+.pick-heading .muted { font-weight: 400; }

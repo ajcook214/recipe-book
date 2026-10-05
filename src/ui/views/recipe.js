@@ -1,6 +1,6 @@
 // @ts-check
 import { getRecord, listEnvelopes, listRecords, saveLocal } from '../../core/db.js';
-import { itemsFromRecipe, newList, nextSort } from '../../core/list.js';
+import { isOnHand, itemsFromRecipe, newList, nextSort } from '../../core/list.js';
 import { formatAmount } from '../../core/quantity.js';
 import { formatMinutes, h, nowIso, sourceParts } from '../dom.js';
 import { defaultListName } from './lists.js';
@@ -83,8 +83,10 @@ export async function render(ctx, [id]) {
   );
 
   /**
-   * Ingredients at the current serving count, all ticked. Untick what is
-   * already in the pantry so the list only holds what actually needs buying.
+   * Ingredients at the current serving count, ticked. Untick what is already
+   * in the pantry so the list only holds what actually needs buying. Common
+   * items marked usually on hand (salt, water) come last, unticked, so they
+   * are a tap away when they have run out.
    */
   async function renderAddPanel() {
     const r = /** @type {Recipe} */ (recipe);
@@ -93,6 +95,8 @@ export async function render(ctx, [id]) {
     const lists = (await listRecords(ctx.db, 'list'))
       .filter((l) => !l.archived)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    /** @type {import('../../core/types.js').Catalog|undefined} */
+    const catalog = await getRecord(ctx.db, 'catalog');
 
     const target = /** @type {HTMLSelectElement} */ (
       h(
@@ -104,10 +108,12 @@ export async function render(ctx, [id]) {
     );
 
     const boxes = r.ingredients.map((ing) => {
-      const box = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', checked: true }));
+      const onHand = isOnHand(catalog, ing.key);
+      const box = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', checked: !onHand }));
       return {
         ing,
         box,
+        onHand,
         row: h(
           'li',
           null,
@@ -151,7 +157,13 @@ export async function render(ctx, [id]) {
         h('button', { type: 'button', class: 'small', onclick: allOrNone(true) }, 'All'),
         h('button', { type: 'button', class: 'small', onclick: allOrNone(false) }, 'None'),
       ),
-      h('ul', { class: 'pick-list' }, boxes.map((b) => b.row)),
+      h('ul', { class: 'pick-list' }, boxes.filter((b) => !b.onHand).map((b) => b.row)),
+      ...(boxes.some((b) => b.onHand)
+        ? [
+            h('p', { class: 'pick-heading' }, 'Usually on hand ', h('span', { class: 'muted' }, '· tick any that have run out')),
+            h('ul', { class: 'pick-list' }, boxes.filter((b) => b.onHand).map((b) => b.row)),
+          ]
+        : []),
       h(
         'div',
         { class: 'panel-row' },

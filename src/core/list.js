@@ -299,12 +299,27 @@ export function findCatalogEntry(catalog, name, exceptKey) {
 }
 
 /**
- * Change one catalog entry: rename, default unit, pin, delete. The entry is
- * stamped, so the change wins the per-entry merge. Its key never changes.
+ * Whether a recipe's line for this key starts unticked when the recipe goes
+ * on a list: its common item is usually on hand, like salt or water. The
+ * line stays in the recipe and scales; it is only left off the list unless
+ * ticked. No entry, or a deleted one, means it is bought like anything else.
  *
  * @param {import('./types.js').Catalog|undefined|null} catalog
  * @param {string} key
- * @param {Partial<Pick<CatalogItem, 'label'|'defaultUnit'|'pinned'|'deleted'>>} changes
+ * @returns {boolean}
+ */
+export function isOnHand(catalog, key) {
+  return findCatalogEntry(catalog, key)?.onHand === true;
+}
+
+/**
+ * Change one catalog entry: rename, default unit, pin, on hand, delete. The
+ * entry is stamped, so the change wins the per-entry merge. Its key never
+ * changes.
+ *
+ * @param {import('./types.js').Catalog|undefined|null} catalog
+ * @param {string} key
+ * @param {Partial<Pick<CatalogItem, 'label'|'defaultUnit'|'pinned'|'onHand'|'deleted'>>} changes
  * @param {string} now
  * @returns {import('./types.js').Catalog}
  */
@@ -359,6 +374,7 @@ export function recipeAdditions(recipes, labels = new Map()) {
         useCount: 0,
         lastUsedAt: null,
         pinned: false,
+        onHand: false,
         deleted: false,
         updatedAt: NEVER,
       });
@@ -495,6 +511,7 @@ export function normalizeCatalog(raw, options = {}) {
       useCount: Number.isInteger(c.useCount) && c.useCount >= 0 ? c.useCount : 0,
       lastUsedAt: textOrNull(c.lastUsedAt),
       pinned: c.pinned === true,
+      onHand: c.onHand === true,
       deleted: c.deleted === true,
       updatedAt: textOrNull(c.updatedAt) && !Number.isNaN(Date.parse(c.updatedAt)) ? c.updatedAt : at,
     });

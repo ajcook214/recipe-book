@@ -63,12 +63,21 @@ export async function render(ctx) {
     const unit = /** @type {HTMLInputElement} */ (
       h('input', { value: entry.defaultUnit ?? '', list: 'unit-options', autocomplete: 'off', autocapitalize: 'none', enterkeyhint: 'done' })
     );
+    const wasOnHand = entry.onHand === true;
+    const onHand = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', checked: wasOnHand }));
     await editDialog({
       title: `Change ${entry.label}`,
       fields: [
         field('Name', label),
         field('Unit', unit, 'Adding it to a list puts down 1 of these, such as 1 gallon. Blank for no amount.'),
         h('datalist', { id: 'unit-options' }, COMMON_UNITS.map((u) => h('option', { value: u }))),
+        h(
+          'label',
+          { class: 'check-field' },
+          onHand,
+          h('span', null, 'Usually on hand'),
+          h('span', { class: 'field-hint' }, 'Like salt or water. A recipe that uses it starts it unticked when you add the recipe to a list.'),
+        ),
       ],
       save: async () => {
         const name = label.value.trim();
@@ -76,8 +85,8 @@ export async function render(ctx) {
         const clash = findCatalogEntry(catalog, name, entry.key);
         if (clash) return `"${clash.label}" is already a common item.`;
         const defaultUnit = unit.value.trim() === (entry.defaultUnit ?? '') ? entry.defaultUnit : normalizeUnit(unit.value);
-        if (name === entry.label && defaultUnit === entry.defaultUnit) return;
-        await change(entry, { label: name, defaultUnit });
+        if (name === entry.label && defaultUnit === entry.defaultUnit && onHand.checked === wasOnHand) return;
+        await change(entry, { label: name, defaultUnit, onHand: onHand.checked });
       },
     });
   }
@@ -94,6 +103,7 @@ export async function render(ctx) {
     const meta = [
       entry.defaultUnit ? `by the ${entry.defaultUnit}` : null,
       entry.useCount ? `added ${entry.useCount} time${entry.useCount === 1 ? '' : 's'}` : 'never added',
+      entry.onHand ? 'usually on hand' : null,
     ].filter(Boolean);
     return h(
       'li',
@@ -156,7 +166,7 @@ export async function render(ctx) {
     h(
       'p',
       { class: 'muted' },
-      'A list suggests all of these as you type, and offers the pinned ones and the ones you add most as quick-add buttons. Tap one to rename it or give it a unit.',
+      'A list suggests all of these as you type, and offers the pinned ones and the ones you add most as quick-add buttons. Tap one to rename it, give it a unit, or mark it usually on hand.',
     ),
     filter,
     rows,

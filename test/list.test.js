@@ -7,6 +7,7 @@ import {
   editCatalogEntry,
   findCatalogEntry,
   groupItems,
+  isOnHand,
   itemsFromRecipe,
   labelFor,
   listIdFor,
@@ -14,6 +15,7 @@ import {
   newItem,
   newList,
   nextSort,
+  normalizeCatalog,
   normalizeList,
   quickAdd,
   rankCatalog,
@@ -188,6 +190,26 @@ test('editing a catalog entry stamps it and keeps its key', () => {
   assert.deepEqual(next.items[0], { ...entry('paper-towels', 3, true, 'Kitchen roll'), updatedAt: 'T2' });
   assert.equal(next.items[1], catalog.items[1], 'the others are untouched, so they lose no merge');
   assert.equal(next.updatedAt, 'T2');
+});
+
+test('an ingredient is on hand only when its live common item says so', () => {
+  const catalog = catalogOf([
+    { ...entry('salt', 0), onHand: true },
+    { ...entry('water', 0, false, 'Tap water'), onHand: true },
+    entry('milk', 4),
+    { ...entry('black-pepper', 0), onHand: true, deleted: true },
+  ]);
+  assert.equal(isOnHand(catalog, 'salt'), true);
+  assert.equal(isOnHand(catalog, 'water'), true, 'a renamed entry still answers to its key');
+  assert.equal(isOnHand(catalog, 'milk'), false, 'an entry from before onHand existed is bought');
+  assert.equal(isOnHand(catalog, 'black-pepper'), false, 'a deleted entry is forgotten');
+  assert.equal(isOnHand(catalog, 'saffron'), false, 'no entry: bought like anything else');
+  assert.equal(isOnHand(undefined, 'salt'), false, 'no catalog yet');
+});
+
+test('importing common items keeps which are on hand', () => {
+  const { catalog } = normalizeCatalog(catalogOf([{ ...entry('salt', 0), onHand: true }, entry('milk', 2)]));
+  assert.deepEqual(catalog.items.map((c) => [c.key, c.onHand]), [['salt', true], ['milk', false]]);
 });
 
 // --- common items from recipes ---------------------------------------------

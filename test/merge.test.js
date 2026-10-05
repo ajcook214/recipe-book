@@ -343,11 +343,12 @@ test('mergeCatalog unions entries by key', () => {
 
 test('mergeCatalog resolves a same-key collision by LWW', () => {
   const local = catalog([catItem({ useCount: 2, updatedAt: T1 })]);
-  const remote = catalog([catItem({ useCount: 9, pinned: true, updatedAt: T2 })]);
+  const remote = catalog([catItem({ useCount: 9, pinned: true, onHand: true, updatedAt: T2 })]);
   const merged = mergeCatalog(local, remote);
   assert.equal(merged?.items.length, 1);
   assert.equal(merged?.items[0]?.useCount, 9);
   assert.equal(merged?.items[0]?.pinned, true);
+  assert.equal(merged?.items[0]?.onHand, true);
 });
 
 test('mergeCatalog keeps tombstoned entries', () => {

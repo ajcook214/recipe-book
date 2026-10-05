@@ -11,7 +11,7 @@ writing code, and update the chunk's **Status** line when you finish.
 
 ```
 npm start        # serves the app at http://localhost:8123/ (tools/serve.ps1)
-npm test         # 186 Node tests
+npm test         # 189 Node tests
 npm run typecheck
 ```
 
@@ -187,6 +187,11 @@ entry that exists. Entries arrive by import:
   ([.claude/skills/common-items/SKILL.md](.claude/skills/common-items/SKILL.md)).
   It reviews the lists in a backup with the owner, then writes the whole
   catalog back, stamped for the per-entry merge.
+
+An entry marked **usually on hand** (`onHand`: salt, pepper, water) starts
+unticked when a recipe goes on a list, and is one tap to add when it runs
+out. The flag is on the common item, not the recipe: salt is on hand
+whichever recipe calls for it.
 
 Bulk changes go through Import, never by overwriting the file in Drive.
 Sync merges entry by entry either way, and Import reports what it did. The

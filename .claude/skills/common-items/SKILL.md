@@ -60,13 +60,17 @@ node tools/ingest.js archive                      # after the import
    - **Remove**: one-offs and typos. List every removal by name and get a
      clear yes for them, because removing deletes on every device.
    - **Pin**: things on most lists.
+   - **On hand**: what the kitchen always has, such as salt, pepper or
+     water. A recipe's line for it starts unticked when the recipe goes on
+     a list. The owner can also set it in the app (Common items → tap one).
    - **Rename** or **set a unit**, where it helps.
 
    The owner may also ask for bulk changes of their own. Wait for their
    answer before editing anything.
 
 4. **Edit `local-data/review/catalog.json`** to match what was agreed.
-   - Change `label`, `defaultUnit`, `pinned` or `useCount` in place.
+   - Change `label`, `defaultUnit`, `pinned`, `onHand` or `useCount` in
+     place.
    - Take an entry out of the array to remove it.
    - Add a new entry as `{ "key": "paper-plates", "label": "Paper plates" }`.
    - **Never change an existing entry's key.** A rename changes the label

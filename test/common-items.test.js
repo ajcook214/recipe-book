@@ -55,9 +55,16 @@ test('each entry is stamped for what the review did to it', () => {
     'taken out becomes a delete, stamped now',
   );
   assert.deepEqual(find(out, 'paper-plates'), {
-    key: 'paper-plates', label: 'Paper plates', defaultUnit: null, useCount: 0, lastUsedAt: null, pinned: false, deleted: false, updatedAt: NOW,
+    key: 'paper-plates', label: 'Paper plates', defaultUnit: null, useCount: 0, lastUsedAt: null, pinned: false, onHand: false, deleted: false, updatedAt: NOW,
   });
   assert.equal(find(out, 'onion').updatedAt, NEVER, 'a recipe ingredient only fills a gap');
+});
+
+test('marking a common item on hand is a change; writing out an older one as not on hand is not', () => {
+  const { items } = stampReview([entry('salt'), entry('milk')], [entry('salt', { onHand: true }), entry('milk', { onHand: false })], NOW);
+  const out = catalogOf(items);
+  assert.deepEqual([find(out, 'salt').onHand, find(out, 'salt').updatedAt], [true, NOW]);
+  assert.deepEqual(find(out, 'milk'), entry('milk'), 'milk had no onHand, and missing means false');
 });
 
 test('a field left out of the copy is left alone', () => {
