@@ -40,21 +40,23 @@ node tools/ingest.js archive [file...]       # move imported files to local-data
       `local-data/html/`, then `node tools/ingest.js fetch local-data/html/<file>.html`.
    4. No JSON-LD at all: read the page text and structure it yourself.
 
-3. **Learn the vocabulary**: `node tools/ingest.js vocab`. Reuse its tags,
-   ingredient keys and catalog keys wherever they fit. A recipe whose
-   ingredients use catalog keys combines with tapped catalog items on a list.
-   If the recipe ids it lists include this page, keep that recipe's title.
+3. **Learn the vocabulary**: `node tools/ingest.js vocab`. Reuse its tags
+   wherever they fit, and its ingredient and catalog keys where **Choosing
+   the key** (below) allows. A recipe whose ingredients use catalog keys
+   combines with tapped catalog items on a list. If the recipe ids it lists
+   include this page, keep that recipe's title.
 
 4. **Write `local-data/inbox/<id>.json`**, by the rules below.
 
 5. **Check**: `node tools/ingest.js check`. Fix every `fix:` line and run it
    again until it passes. Read each `note:` and act on the ones that matter.
-   For example, a new key that is probably a known one should use the known
-   key, and a new tag should be one you meant.
+   A new key that looks like a known one is a question for **Choosing the
+   key**, not an answer, and a new tag should be one you meant.
 
 6. **Report** briefly, for each recipe: title, servings, tags, and anything the
-   owner should know (a clash Import will ask about, a meal-kit swap, a
-   judgement call). Then tell them how to import:
+   owner should know: a clash Import will ask about, a meal-kit swap, a key
+   merged into a known one or kept apart from it, or another judgement call.
+   Then tell them how to import:
    1. Open <https://ajcook214.github.io/recipe-book/>, then Import →
       Choose files…, and pick from
       `C:\Users\kille\Documents\recipe-book\local-data\inbox\`.
@@ -122,8 +124,7 @@ Every field is present, in this order:
   `null` for a bare count. Only stored forms combine on a shopping list.
 - `item`: what the cook buys, as the page names it, without prep
   ("large onion", "Yukon Gold potatoes").
-- `key`: the plain thing as a slug. Prefer a known key ("large onion" →
-  `onion`, "corn kernels" → `corn`).
+- `key`: what the cook buys, as a slug. See **Choosing the key**.
 - `note`: prep and asides ("finely diced", "divided", "optional", "for the
   sauce"), or `null`.
 - `scalable`: `true`, except for amounts that should not grow with the batch,
@@ -133,6 +134,37 @@ Every field is present, in this order:
 - **Meal-kit units** ("1 unit stock concentrate") become something a store
   sells, with a note saying what it replaces ("replaces 1 HelloFresh stock
   concentrate").
+
+**Choosing the key.** The key names the ingredient exactly as precisely as
+the recipe does. Lines that share a key merge into one row on a shopping
+list, so the owner wants more granularity, not less. An extra row is a
+small nuisance, but a wrong merge is a wrong purchase.
+- Keep every detail the recipe specifies: "onion" is `onion`, "yellow
+  onion" is `yellow-onion`, and "red onion" is `red-onion`. None of them
+  merge. Never add a detail the recipe left out, or drop one it gave.
+- Drop only what never changes what gets bought: size, prep, and singular
+  versus plural. "Large egg" and "2 eggs" are both `eggs`, and "1 onion,
+  finely diced" is `onion`. For singular or plural, reuse whichever form is
+  already known. `check` notes a mismatch.
+- Merge different words only when they are synonyms for the same product,
+  like scallions and green onions. Then reuse the known key. Two things a
+  cook could substitute for each other are still two things: `garlic-powder`
+  is not `garlic`.
+- If you are not sure two names mean the same product, look it up. If it is
+  still unclear, ask the owner before writing the file. Never merge on a
+  guess.
+- `item` keeps the recipe's own wording either way, so the recipe still
+  says "kosher salt" when the key is `salt`.
+- Add each answer the owner gives to the list below, so it is asked only
+  once, and mention the change, so it gets committed.
+
+**Settled by the owner**
+- Merge: kosher salt, sea salt and plain salt are all `salt`, being close
+  enough that it never matters. Seasoned salt is a different product:
+  `seasoned-salt`.
+- Merge: "large egg" and "eggs" are both `eggs`.
+- Keep apart: an onion the recipe does not specify is `onion`. A yellow,
+  red or white onion has its own key.
 
 **Steps are written in your own words**, never copied, and **carry no
 quantities**: amounts live in the ingredients, so scaling stays right.
