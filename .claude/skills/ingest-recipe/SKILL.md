@@ -182,6 +182,7 @@ small nuisance, but a wrong merge is a wrong purchase.
 - Merge: "large egg" and "eggs" are both `eggs`.
 - Keep apart: an onion the recipe does not specify is `onion`. A yellow,
   red or white onion has its own key.
+- Keep apart: "lean ground beef" is `lean-ground-beef`, not `ground-beef`.
 
 **Steps are written in your own words**, never copied, and **carry no
 quantities**: amounts live in the ingredients, so scaling stays right.
